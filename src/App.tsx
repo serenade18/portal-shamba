@@ -5,6 +5,9 @@ import { AppShell } from "./components/shell/AppShell";
 import { Toaster } from "./components/ui/feedback";
 import { Skeleton } from "./components/ui/feedback";
 import { AlertsPage } from "./pages/alerts/AlertsPage";
+import { AdminDashboard } from "./pages/admin/AdminDashboard";
+import { AdminLayout, RequireAdmin } from "./pages/admin/AdminLayout";
+import { AdminSignIn } from "./pages/admin/AdminSignIn";
 import { ResetPassword } from "./pages/auth/ResetPassword";
 import { SignIn } from "./pages/auth/SignIn";
 import { FarmSetup } from "./pages/auth/FarmSetup";
@@ -57,6 +60,13 @@ function RequireSetup() {
 const router = createBrowserRouter([
   { path: "/sign-in", element: <SignIn /> },
   { path: "/reset-password", element: <ResetPassword /> },
+  // Shamba OS staff: a separate sign-in and session (stores/adminSession).
+  { path: "/admin/sign-in", element: <AdminSignIn /> },
+  {
+    path: "/admin",
+    element: <RequireAdmin />,
+    children: [{ element: <AdminLayout />, children: [{ index: true, element: <AdminDashboard /> }] }],
+  },
   {
     element: <RequireAuth />,
     children: [

@@ -158,3 +158,11 @@ export const alerts = {
 export const dashboard = {
   get: (q: { farm_id: string; from: string; to: string }) => http.get<T.Dashboard>("/dashboard", q),
 };
+
+/** Shamba OS staff. Uses the separate admin session (never the farmer's tokens or X-Org-Id). */
+export const staff = {
+  login: (email: string, password: string, installId: string) =>
+    http.post<T.SignInResponse>("/auth/staff/login", { email, password, device: device(installId) }, { auth: false, org: false }),
+  logout: (refresh: string | null) => http.post<void>("/auth/logout", { refresh: refresh ?? "" }, { as: "admin", org: false }),
+  analytics: (days: T.AnalyticsDays) => http.get<T.StaffAnalytics>("/staff/analytics", { days }, { as: "admin", org: false }),
+};

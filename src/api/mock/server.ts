@@ -274,6 +274,16 @@ route("POST", "/auth/password/reset", (ctx) => {
   return null;
 }, { auth: false, org: false, status: 204 });
 
+route("POST", "/auth/staff/login", (ctx) => {
+  const email = String(ctx.body.email ?? "").trim().toLowerCase();
+  const user = ctx.db.users.find((u) => u.email?.toLowerCase() === email && ctx.db.staff.includes(u.id));
+  if (!user || ctx.db.credentials[user.id] !== String(ctx.body.password ?? "")) {
+    throw new MockError(401, "auth.invalid_credentials", "Email or password is not correct.");
+  }
+  const deviceId = crypto.randomUUID();
+  return { ...issue(user.id, deviceId), is_new_user: false, device_id: deviceId, user, memberships: [] };
+}, { auth: false, org: false });
+
 route("POST", "/auth/token/refresh", (ctx) => {
   const [kind, userId, deviceId] = String(ctx.body.refresh ?? "").split(".");
   if (kind !== "mockr" || !ctx.db.users.some((u) => u.id === userId)) throw new MockError(401, "device_revoked", "This device has been signed out.");
@@ -1448,3 +1458,96 @@ route("GET", "/dashboard", (ctx) => {
   } satisfies T.Dashboard;
 });
 
+
+
+/* ---------- Staff analytics (demo numbers) ---------- */
+
+/** Repeatable pseudo-random numbers, so the demo shows the same platform each load. */
+function seeded(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+route("GET", "/staff/analytics", (ctx) => {
+  if (!ctx.db.staff.includes(ctx.userId ?? "")) throw new MockError(403, "permission_denied", "You do not have permission to do this.");
+  const days = Number(ctx.q.get("days") ?? 30) as T.AnalyticsDays;
+  if (![7, 30, 90].includes(days)) throw new MockError(400, "validation_error", "Some fields are not valid.", { days: ["Choose 7, 30 or 90."] });
+  const rand = seeded(20260930);
+  const today = new Date();
+  const series = (n: number) => Array.from({ length: n }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (n - 1 - i));
+    const growth = 1 + (90 - (n - 1 - i)) / 120; // the platform grows over the last 90 days
+    const weekend = d.getDay() === 0 ? 0.55 : d.getDay() === 6 ? 0.8 : 1;
+    const signups = Math.round((4 + rand() * 7) * growth * weekend);
+    return {
+      date: isoDate(d),
+      signups,
+      organisations: Math.round(signups * (0.72 + rand() * 0.2)),
+      active_farmers: Math.round((180 + rand() * 60) * growth * weekend),
+      collected: money(Math.round((26000 + rand() * 34000) * growth * weekend)),
+    };
+  });
+  const all = series(days * 2);
+  const daily = all.slice(days);
+  const prev = all.slice(0, days);
+  const sum = (rows: typeof daily, k: "signups" | "organisations") => rows.reduce((a, r) => a + r[k], 0);
+  const collected = daily.reduce((a, r) => a + Number(r.collected), 0);
+  const signed = sum(daily, "signups");
+  const requests = Math.round(collected / 2100);
+  const succeeded = Math.round(requests * 0.87);
+  const users = ctx.db.users.filter((u) => !ctx.db.staff.includes(u.id));
+  return {
+    days, from: daily[0]!.date, to: daily[daily.length - 1]!.date, generated_at: new Date().toISOString(), currency: "KES",
+    totals: {
+      farmers: { total: 1184 + signed, new: signed, previous_new: sum(prev, "signups") },
+      organisations: { total: 968 + sum(daily, "organisations"), new: sum(daily, "organisations"), previous_new: sum(prev, "organisations") },
+      active_farmers: { count: Math.round(640 * (1 + days / 150)), previous: Math.round(590 * (1 + days / 150)) },
+      payments: { collected: money(collected), previous_collected: money(prev.reduce((a, r) => a + Number(r.collected), 0)), requests, succeeded, success_rate: Math.round((succeeded / Math.round(requests * 0.97)) * 100) },
+      pending_invitations: 37,
+    },
+    daily,
+    funnel: [
+      { step: "signed_up", count: signed },
+      { step: "farm_account", count: Math.round(signed * 0.91) },
+      { step: "added_member", count: Math.round(signed * 0.38) },
+      { step: "requested_payment", count: Math.round(signed * 0.22) },
+    ],
+    platforms: [
+      { platform: "android", devices: 1432, farmers: 1206 },
+      { platform: "web", devices: 311, farmers: 268 },
+      { platform: "ios", devices: 94, farmers: 88 },
+    ],
+    languages: [{ locale: "sw", farmers: 902 + Math.round(signed * 0.7) }, { locale: "en", farmers: 282 + Math.round(signed * 0.3) }],
+    roles: [{ role: "owner", members: 968 }, { role: "field_worker", members: 544 }, { role: "manager", members: 131 }],
+    payment_statuses: [
+      { status: "succeeded", count: succeeded },
+      { status: "failed", count: Math.round(requests * 0.07) },
+      { status: "expired", count: Math.round(requests * 0.03) },
+      { status: "pending", count: requests - succeeded - Math.round(requests * 0.07) - Math.round(requests * 0.03) },
+    ],
+    recent_signups: users.slice(0, 10).map((u, i) => {
+      const m = ctx.db.memberships.find((x) => x.user_id === u.id && x.is_active);
+      const joined = new Date(today.getTime() - (i * 7 + 2) * 3_600_000);
+      return {
+        id: u.id, name: u.name, phone: u.phone, email: u.email, username: u.username, date_joined: joined.toISOString(),
+        organisation: m ? ctx.db.orgs.find((o) => o.id === m.org_id)?.name ?? null : null, role: m?.role ?? null,
+        platform: i % 3 === 1 ? "web" : "android", last_seen_at: new Date(joined.getTime() + 3_600_000).toISOString(),
+      };
+    }),
+    top_organisations: [
+      ...ctx.db.orgs.map((o) => ({
+        id: o.id, name: o.name, created_at: o.created_at,
+        members: ctx.db.memberships.filter((m) => m.org_id === o.id && m.is_active).length,
+        owner: ctx.db.users.find((u) => ctx.db.memberships.some((m) => m.org_id === o.id && m.user_id === u.id && m.role === "owner"))?.name ?? null,
+        collected: money(o.name.startsWith("Kamau") ? 184250 : 61300),
+      })),
+      { id: "demo-3", name: "Chebet dairy", created_at: "2026-03-04T08:00:00Z", members: 6, owner: "Ruth Chebet", collected: "242100.00" },
+      { id: "demo-4", name: "Ouma fish ponds", created_at: "2026-05-19T08:00:00Z", members: 4, owner: "Peter Ouma", collected: "97800.00" },
+    ].sort((a, b) => b.members - a.members),
+  } satisfies T.StaffAnalytics;
+}, { org: false });

@@ -9,6 +9,9 @@ import { at, balanceOf, daysAgo, emptyOrgData, type MockDb, type MRecorder, type
 export const DEMO_OWNER_PHONE = "+254712345678";
 export const DEMO_WORKER_PHONE = "+254722000111";
 export const DEMO_PASSWORD = "shamba123";
+export const DEMO_STAFF_EMAIL = "admin@shambaos.co.ke";
+export const DEMO_STAFF_PASSWORD = "shamba-admin";
+const STAFF_ID = "0192a000-0000-7000-8000-0000000005af";
 
 function rng(seed: number) {
   return () => {
@@ -38,9 +41,11 @@ export function seed(): MockDb {
       { id: ids.mary, phone: "+254733456789", name: "Mary Wanjiku", email: "mary@kamaufarm.co.ke", username: "mwanjiku", preferred_locale: "sw", date_joined: created },
       { id: ids.otieno, phone: DEMO_WORKER_PHONE, name: "Otieno Ouma", email: null, username: "otieno", preferred_locale: "sw", date_joined: created },
       { id: ids.wanjiru, phone: "+254711222333", name: "Grace Wanjiru", email: "grace@wanjirufarm.co.ke", username: "gwanjiru", preferred_locale: "sw", date_joined: created },
+      { id: STAFF_ID, phone: "+254700000001", name: "Shamba OS Support", email: DEMO_STAFF_EMAIL, username: null, preferred_locale: "en", date_joined: created },
     ],
+    staff: [STAFF_ID],
     // Demo password for every seeded account (auth.demoHint).
-    credentials: { [ids.john]: DEMO_PASSWORD, [ids.mary]: DEMO_PASSWORD, [ids.otieno]: DEMO_PASSWORD, [ids.wanjiru]: DEMO_PASSWORD },
+    credentials: { [ids.john]: DEMO_PASSWORD, [ids.mary]: DEMO_PASSWORD, [ids.otieno]: DEMO_PASSWORD, [ids.wanjiru]: DEMO_PASSWORD, [STAFF_ID]: DEMO_STAFF_PASSWORD },
     orgs: [
       { id: ids.orgKamau, name: "Kamau farm", country: "KE", currency: "KES", default_locale: "sw", created_at: created, payment_mode: "request" },
       { id: ids.orgWanjiru, name: "Wanjiru family farm", country: "KE", currency: "KES", default_locale: "sw", created_at: created, payment_mode: "manual" },

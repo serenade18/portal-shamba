@@ -3,10 +3,10 @@ import { Brand } from "@/components/shell/Brand";
 import { useT } from "@/i18n";
 
 /** Split screen: the farmer photo under a Deep Forest scrim with the logo and brand line, the form on the right (7.7). */
-export function SplitLayout({ children }: { children: ReactNode }) {
+export function SplitLayout({ children, variant = "farmer" }: { children: ReactNode; variant?: "farmer" | "admin" }) {
   const t = useT();
   return (
-    <div className="split">
+    <div className={variant === "admin" ? "split split-admin" : "split"}>
       <aside className="split-brand">
         <div className="logo">
           <Brand tagline />

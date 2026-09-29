@@ -1,3 +1,4 @@
+import { useAdminSession } from "@/stores/adminSession";
 import { useSession } from "@/stores/session";
 import { useUi } from "@/stores/ui";
 import type { ApiErrorBody } from "./types";
@@ -17,6 +18,7 @@ const IMPLEMENTED = [
   /^\/members(\/[^/]+)?$/,
   /^\/invitations(\/[^/]+)?$/,
   /^\/payments\/requests(\/[^/]+)?(\/otp)?$/,
+  /^\/staff\//, // staff analytics (the admin area)
 ];
 
 export class ApiError extends Error {
@@ -38,6 +40,15 @@ export interface RequestOptions {
   /** Send X-Org-Id. Defaults to true whenever an organisation is active. */
   org?: boolean;
   auth?: boolean;
+  /** Whose tokens to send: the farmer session (default) or the staff admin session. */
+  as?: Who;
+}
+
+type Who = "farmer" | "admin";
+
+/** The token store for each kind of session; both expose the same fields. */
+function store(who: Who = "farmer") {
+  return who === "admin" ? useAdminSession.getState() : useSession.getState();
 }
 
 export interface RawRequest {
@@ -83,11 +94,12 @@ export async function sendNetwork(req: RawRequest): Promise<{ status: number; bo
 }
 
 function buildRequest(method: string, path: string, opts: RequestOptions): RawRequest {
-  const s = useSession.getState();
+  const s = store(opts.as);
+  const orgId = opts.as === "admin" ? null : useSession.getState().activeOrgId;
   // Django localises its messages (field errors included) by Accept-Language.
   const headers: Record<string, string> = { "Accept-Language": useUi.getState().locale };
   if (opts.auth !== false && s.access) headers.Authorization = `Bearer ${s.access}`;
-  if (opts.org !== false && s.activeOrgId) headers["X-Org-Id"] = s.activeOrgId;
+  if (opts.org !== false && orgId) headers["X-Org-Id"] = orgId;
   const query = new URLSearchParams();
   for (const [k, v] of Object.entries(opts.query ?? {})) {
     if (v !== undefined && v !== null && v !== "") query.set(k, String(v));
@@ -100,13 +112,13 @@ async function send(req: RawRequest) {
   return sendNetwork(req);
 }
 
-let refreshing: Promise<boolean> | null = null;
+const refreshing: Record<Who, Promise<boolean> | null> = { farmer: null, admin: null };
 
 /** Rotates the refresh token once, however many requests hit a 401 at the same time. */
-export function refreshAccess(): Promise<boolean> {
-  if (!refreshing) {
-    refreshing = (async () => {
-      const { refresh, setTokens, signOut } = useSession.getState();
+export function refreshAccess(who: Who = "farmer"): Promise<boolean> {
+  if (!refreshing[who]) {
+    refreshing[who] = (async () => {
+      const { refresh, setTokens, signOut } = store(who);
       if (!refresh) return false;
       const res = await send(buildRequest("POST", "/auth/token/refresh", { body: { refresh }, auth: false, org: false }));
       if (res.status === 200) {
@@ -117,18 +129,18 @@ export function refreshAccess(): Promise<boolean> {
       signOut();
       return false;
     })().finally(() => {
-      refreshing = null;
+      refreshing[who] = null;
     });
   }
-  return refreshing;
+  return refreshing[who]!;
 }
 
 export async function api<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
-  if (opts.auth !== false && !useSession.getState().access && useSession.getState().refresh) {
-    await refreshAccess();
+  if (opts.auth !== false && !store(opts.as).access && store(opts.as).refresh) {
+    await refreshAccess(opts.as);
   }
   let res = await send(buildRequest(method, path, opts));
-  if (res.status === 401 && opts.auth !== false && (await refreshAccess())) {
+  if (res.status === 401 && opts.auth !== false && (await refreshAccess(opts.as))) {
     res = await send(buildRequest(method, path, opts));
   }
   if (res.status >= 400) {
