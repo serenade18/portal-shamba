@@ -3,15 +3,16 @@ import type * as T from "./types";
 
 type Q = Record<string, string | number | boolean | null | undefined>;
 
+const device = (installId: string) => ({ install_id: installId, platform: "web", app_version: "portal-0.1", name: navigator.userAgent.slice(0, 100) });
+
 export const auth = {
-  requestOtp: (phone: string, locale: T.Locale) =>
-    http.post<T.OtpRequestResponse>("/auth/otp/request", { phone, locale }, { auth: false, org: false }),
-  verifyOtp: (phone: string, code: string, locale: T.Locale, installId: string) =>
-    http.post<T.SignInResponse>(
-      "/auth/otp/verify",
-      { phone, code, locale, device: { install_id: installId, platform: "web", app_version: "portal-0.1", name: navigator.userAgent.slice(0, 100) } },
-      { auth: false, org: false },
-    ),
+  /** The portal signs in with email or username and a password; the Flutter app keeps phone codes. */
+  login: (identifier: string, password: string, installId: string) =>
+    http.post<T.SignInResponse>("/auth/login", { identifier, password, device: device(installId) }, { auth: false, org: false }),
+  register: (body: T.RegisterInput, installId: string) =>
+    http.post<T.SignInResponse>("/auth/register", { ...body, device: device(installId) }, { auth: false, org: false }),
+  forgotPassword: (email: string, locale: T.Locale) =>
+    http.post<void>("/auth/password/forgot", { email, locale }, { auth: false, org: false }),
   logout: (refresh: string | null) => http.post<void>("/auth/logout", { refresh: refresh ?? "" }, { org: false }),
 };
 

@@ -352,6 +352,48 @@
 .split-form .card {
   width: min(440px, 100%);
 }
+.auth-lang {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--s-6);
+}
+.password-wrap {
+  position: relative;
+}
+.password-wrap .input {
+  width: 100%;
+  padding-right: 48px;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.password-toggle:hover {
+  background: var(--green-100);
+  color: var(--green-800);
+}
+.auth-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+}
 .lang-choice {
   display: grid;
   gap: var(--s-3);
@@ -896,4 +938,7 @@
   .weather-days {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+.btn.flush {
+  margin-left: calc(-1 * var(--s-3));
 }
