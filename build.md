@@ -133,7 +133,7 @@ The palette's three gradients are used only here:
 
 | Gradient | Used on |
 | --- | --- |
-| `#1F382C → #4F765B` | Sign-in and onboarding background panel |
+| `#1F382C → #4F765B` | Onboarding header; the sign-in panel uses a Deep Forest scrim over the farmer photo instead (7.7) |
 | `#5C91A6 → #8FBED0` | Weather panel (small text sits over the darker end, or uses a Deep Forest scrim) |
 | `#D99A32 → #F2C861` | Not used in the MVP portal; reserved for harvest celebration moments in the app |
 
@@ -338,7 +338,7 @@ If the organisation uses manual confirmation (payment option C), the M-Pesa choi
 
 ### 7.7 Sign-in and account setup
 
-Split screen: the left panel uses the Deep Forest gradient with the logo and "Manage. Grow. Thrive." in the chosen language; the right panel holds the form, with an English and Kiswahili switch above it (ONB-01).
+Split screen: the left panel shows a photo of a farmer at work (`public/brand/auth-background.webp`, a 1200 px copy of `auth-background-original.jpg`) under a Deep Forest scrim, darker at the top for the logo and at the bottom for "Manage. Grow. Thrive." in the chosen language, lighter across her face. On phones the panel becomes a 240 px strip with an even, stronger scrim, since the text covers most of it; the right panel holds the form, with an English and Kiswahili switch above it (ONB-01).
 
 The portal signs in with **email or username and a password**. Phone numbers with one-time SMS codes remain the sign-in method in the Flutter app.
 
