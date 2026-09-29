@@ -486,6 +486,262 @@
 }
 
 /* ---------- Dashboard (7.1) ---------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--s-5);
+  align-items: stretch;
+}
+.dash-grid > * {
+  min-width: 0;
+}
+.dash-grid > * > .panel,
+.dash-grid > * > .weather-today {
+  height: 100%;
+}
+.span-4 { grid-column: span 4; }
+.span-5 { grid-column: span 5; }
+.span-7 { grid-column: span 7; }
+.span-8 { grid-column: span 8; }
+.span-12 { grid-column: span 12; }
+@media (max-width: 1279px) {
+  .span-8, .span-7, .span-5 { grid-column: span 12; }
+  .span-4 { grid-column: span 6; }
+}
+@media (max-width: 767px) {
+  .dash-grid { gap: var(--s-4); }
+  .dash-grid > * { grid-column: span 12; }
+}
+
+/* Farm overview: the key figure beside a six-month trend */
+.overview-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr);
+  gap: var(--s-5);
+  padding: var(--s-5);
+}
+.overview-figures {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s-5);
+}
+.overview-figures .display {
+  margin: 2px 0 var(--s-1);
+}
+.trend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--radius-chip);
+  font-weight: 500;
+}
+.trend-pill.up {
+  background: var(--green-100);
+  color: var(--green-800);
+}
+.trend-pill.down {
+  background: rgb(185 101 69 / 0.12);
+  color: var(--terracotta-ink);
+}
+.overview-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+  margin: 0;
+}
+.overview-stats .stat {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  border-left: 4px solid var(--revenue);
+}
+.overview-stats .stat.cost {
+  border-left-color: var(--cost);
+}
+.overview-stats dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.overview-chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+@media (max-width: 767px) {
+  .overview-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--s-4);
+  }
+}
+
+/* Revenue and costs ring */
+.split-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-5);
+  padding: var(--s-5);
+}
+.donut {
+  position: relative;
+  width: 168px;
+  height: 168px;
+}
+.donut-centre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: var(--fs-heading);
+}
+.split-legend {
+  width: 100%;
+  display: grid;
+  gap: var(--s-2);
+}
+.split-legend li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  font-variant-numeric: tabular-nums;
+}
+.split-legend li .money {
+  font-weight: 500;
+}
+.split-legend li.total {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s-2);
+  font-weight: 700;
+}
+.split-legend li.total .money {
+  font-weight: 700;
+}
+.split-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* Weather today on the sky gradient; text sits on the darker end or a scrim (3.4) */
+.weather-today {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(160deg, #4a7f94 0%, var(--sky) 45%, #8fbed0 100%);
+  color: var(--surface);
+}
+.weather-today h2,
+.weather-today a {
+  color: inherit;
+}
+.weather-now {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+.weather-temp {
+  font-size: 48px;
+  line-height: 52px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.weather-temp span {
+  font-size: var(--fs-heading);
+  vertical-align: top;
+  margin-left: 2px;
+}
+.weather-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  font-size: var(--fs-small);
+}
+.weather-facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.weather-week {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--s-1);
+  margin-top: auto;
+  padding: var(--s-2);
+  border-radius: var(--radius-control);
+  background: rgb(31 56 44 / 0.3);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+}
+.weather-week li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s-1) 0;
+  border-radius: 6px;
+}
+.weather-week li.heavy {
+  background: rgb(31 56 44 / 0.5);
+  box-shadow: inset 0 0 0 1px var(--surface);
+}
+
+/* Today's tasks */
+.task-progress {
+  height: 4px;
+  background: var(--surface-2);
+}
+.task-progress div {
+  height: 100%;
+  background: var(--health);
+  transition: width 0.4s ease-out;
+}
+.task-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-5);
+}
+.task-list li + li {
+  border-top: 1px solid var(--border);
+}
+.task-list li > svg {
+  flex: none;
+  margin-top: 1px;
+}
+.task-list li.done > svg {
+  color: var(--health);
+}
+.task-list li.pending > svg {
+  color: var(--amber);
+}
+.task-list li.pending .small {
+  color: var(--amber-ink);
+}
+
+/* Money owed */
+.owed-figure {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  font-weight: 700;
+}
+.owed-figure svg {
+  color: var(--amber);
+  flex: none;
+}
+
 .headline {
   display: flex;
   flex-wrap: wrap;

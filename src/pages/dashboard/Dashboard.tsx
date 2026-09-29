@@ -1,47 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, CircleDashed } from "lucide-react";
+import { CheckCircle2, Plus, ShoppingCart, Wallet } from "lucide-react";
 import { Link } from "react-router";
 import * as api from "@/api/endpoints";
 import { useCatalogue, useFarm, useKey, useRange } from "@/api/hooks";
 import type { Dashboard as DashboardData, TodayRecord } from "@/api/types";
 import { ButtonLink } from "@/components/ui/Button";
-import { Money, PageHead, Panel, useCurrency } from "@/components/ui/data";
+import { Money, PageHead, Panel } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, Skeleton } from "@/components/ui/feedback";
 import { AlertRow } from "@/pages/alerts/AlertRow";
 import { useQty, useT } from "@/i18n";
-import { formatDate, formatMoney, percentChange } from "@/lib/format";
-import { useCan } from "@/stores/session";
+import { formatDate } from "@/lib/format";
+import { useCan, useSession } from "@/stores/session";
 import { enterprisePath } from "../enterprise/paths";
-import { WeatherStrip } from "../weather/WeatherStrip";
 import { EnterpriseStrip } from "./EnterpriseStrip";
-
-function Headline({ data }: { data: NonNullable<DashboardData["profit"]> }) {
-  const t = useT();
-  const profit = Number(data.profit);
-  const change = percentChange(profit, Number(data.previous_profit));
-  const word = profit < 0 ? t("dash.lossLabel") : t("dash.profitLabel");
-  return (
-    <div className="headline">
-      <div>
-        <p className="muted">{word}</p>
-        <p className={`display ${profit < 0 ? "ink-loss" : "ink-profit"}`}>{formatMoney(profit, useCurrency())}</p>
-        <p className="small muted">
-          {change === null ? t("dash.change.none", { word }) : t(change >= 0 ? "dash.change.up" : "dash.change.down", { word, pct: Math.abs(change) })}
-        </p>
-      </div>
-      <div className="side">
-        <div>
-          <p className="small muted">{t("common.revenue")}</p>
-          <Money value={data.revenue} kind="revenue" className="strong" />
-        </div>
-        <div>
-          <p className="small muted">{t("common.costs")}</p>
-          <Money value={data.cost} kind="cost" className="strong" />
-        </div>
-      </div>
-    </div>
-  );
-}
+import { MoneySplit, Overview } from "./Overview";
+import { TodayTasks, WeatherToday } from "./TodayCards";
 
 function FirstStep({ today }: { today: TodayRecord[] }) {
   const t = useT();
@@ -88,41 +61,16 @@ function Attention({ data }: { data: DashboardData }) {
 function Owed({ data }: { data: NonNullable<DashboardData["receivables"]> }) {
   const t = useT();
   return (
-    <Panel title={t("dash.moneyOwed")} actions={Number(data.total) > 0 && <Link to="/sales?tab=owed" className="small strong">{t("common.view")}</Link>}>
+    <Panel title={t("dash.moneyOwed")} className="owed-card" actions={Number(data.total) > 0 && <Link to="/sales?tab=owed" className="small strong">{t("common.view")}</Link>}>
       {Number(data.total) === 0 ? (
-        <p className="muted">{t("dash.nothingOwed")}</p>
+        <p className="muted row"><CheckCircle2 size={18} className="ink-health" aria-hidden /> {t("dash.nothingOwed")}</p>
       ) : (
         <div className="stack" style={{ gap: 4 }}>
-          <p>
-            <Money value={data.total} kind="revenue" className="strong" /> {t.n("dash.owedFrom", data.customers)}
-          </p>
+          <p className="owed-figure"><Wallet size={22} aria-hidden /><Money value={data.total} kind="revenue" /></p>
+          <p className="muted">{t.n("dash.owedFrom", data.customers)}</p>
           {data.oldest_days != null && <p className="small muted">{t("dash.oldest", { days: data.oldest_days, name: data.oldest_customer })}</p>}
         </div>
       )}
-    </Panel>
-  );
-}
-
-function TodayPanel({ data }: { data: DashboardData }) {
-  const t = useT();
-  const qty = useQty();
-  const catalogue = useCatalogue();
-  return (
-    <Panel title={t("dash.today")} bodyless>
-      {data.today.map((r, i) => {
-        const module = catalogue.data?.enterprise_types.find((x) => x.code === r.type)?.module;
-        return (
-          <div key={r.enterprise_id} className="spread" style={{ padding: "12px 20px", borderTop: i ? "1px solid var(--border)" : undefined }}>
-            <div>
-              {module ? <Link to={enterprisePath(module, r.enterprise_id)} className="strong">{r.name}</Link> : <span className="strong">{r.name}</span>}
-              <p className="small muted">
-                {r.summary.map((s) => (s.unit ? qty(s.value, s.unit) : `${s.value} ${t("rec.deaths").toLowerCase()}`)).join(", ")}
-              </p>
-            </div>
-            {r.recorded ? <Chip tone="health">{t("dash.recorded")}</Chip> : <Chip tone="amber" icon={<CircleDashed size={14} aria-hidden />}>{t("dash.notRecorded")}</Chip>}
-          </div>
-        );
-      })}
     </Panel>
   );
 }
@@ -147,15 +95,19 @@ function StockPanel({ data }: { data: DashboardData }) {
 
 function DashboardSkeleton() {
   return (
-    <div className="stack-lg" aria-busy="true">
-      <Skeleton height={120} />
-      <Skeleton height={260} />
-      <div className="grid-2">
-        <Skeleton height={200} />
-        <Skeleton height={200} />
-      </div>
+    <div className="dash-grid" aria-busy="true">
+      <div className="span-8"><Skeleton height={300} /></div>
+      <div className="span-4"><Skeleton height={300} /></div>
+      <div className="span-4"><Skeleton height={260} /></div>
+      <div className="span-4"><Skeleton height={260} /></div>
+      <div className="span-4"><Skeleton height={260} /></div>
     </div>
   );
+}
+
+function greeting(): "morning" | "afternoon" | "evening" {
+  const h = new Date().getHours();
+  return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
 }
 
 /** Answers "what is making money?" before anything else (7.1, J6, FIN-04). */
@@ -172,46 +124,55 @@ export function Dashboard() {
   });
   const weather = useQuery({ queryKey: key("weather", farm?.id), queryFn: () => api.weather.get(farm!.id), enabled: !!farm, staleTime: 30 * 60_000 });
 
+  const name = useSession((s) => s.user?.name?.split(" ")[0]);
   const sub = money
-    ? t("dash.subtitle", { range: t(`range.${range.preset}`), from: formatDate(range.from, t.locale, { year: false }), to: formatDate(range.to, t.locale) })
-    : formatDate(new Date().toISOString(), t.locale, { weekday: true });
+    ? t("dash.farmSubtitle", { farm: farm?.name ?? "", range: t(`range.${range.preset}`), from: formatDate(range.from, t.locale, { year: false }), to: formatDate(range.to, t.locale) })
+    : `${farm?.name ?? ""}. ${formatDate(new Date().toISOString(), t.locale, { weekday: true })}`;
+  const actions = money && (
+    <>
+      <ButtonLink to="/purchases?new=1" icon={<ShoppingCart size={18} aria-hidden />}>{t("purch.new")}</ButtonLink>
+      <ButtonLink to="/sales?new=1" variant="primary" icon={<Plus size={18} aria-hidden />}>{t("sales.new")}</ButtonLink>
+    </>
+  );
+  const d = q.data;
+  const active = d?.profit?.enterprises.some((e) => Number(e.cost) || Number(e.revenue));
 
   return (
     <>
-      <PageHead title={farm?.name ?? ""} sub={sub} />
+      <PageHead title={name ? t(`dash.greeting.${greeting()}`, { name }) : farm?.name ?? ""} sub={sub} actions={actions} />
       {q.isLoading ? (
         <DashboardSkeleton />
       ) : q.error ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
-      ) : q.data ? (
-        <div className="stack-lg">
-          {q.data.profit ? (
-            <>
-              {Number(q.data.profit.revenue) === 0 && Number(q.data.profit.cost) === 0 && <FirstStep today={q.data.today} />}
-              <section className="panel" aria-label={t("dash.enterprises")}>
-                <Headline data={q.data.profit} />
-                <div className="panel-section" style={{ borderTop: "1px solid var(--border)" }}>
-                  <div style={{ padding: "16px 20px 8px" }}>
-                    <h2>{t("dash.enterprises")}</h2>
-                    {q.data.profit.enterprises.some((e) => Number(e.cost) || Number(e.revenue)) && (
-                      <p className="small muted">{t("dash.enterprisesSummary", { best: q.data.profit.enterprises[0]!.enterprise_id ? q.data.profit.enterprises[0]!.name : t("common.wholeFarm") })}</p>
-                    )}
-                  </div>
-                  {q.data.profit.enterprises.some((e) => Number(e.cost) || Number(e.revenue)) ? <EnterpriseStrip rows={q.data.profit.enterprises} /> : <EmptyState text={t("dash.noActivity")} />}
-                </div>
-              </section>
-            </>
-          ) : (
-            <TodayPanel data={q.data} />
+      ) : d ? (
+        <div className="dash-grid">
+          {d.profit && Number(d.profit.revenue) === 0 && Number(d.profit.cost) === 0 && (
+            <div className="span-12"><FirstStep today={d.today} /></div>
           )}
-          <div className="grid-2">
-            <div className="stack-lg">
-              <Attention data={q.data} />
-              {q.data.receivables && <Owed data={q.data.receivables} />}
-              {!money && <StockPanel data={q.data} />}
-            </div>
-            <div>{weather.data ? <WeatherStrip days={weather.data.forecast} title={t("dash.weather")} /> : <Skeleton height={200} />}</div>
-          </div>
+          {d.profit && (
+            <>
+              <div className="span-8"><Overview data={d.profit} /></div>
+              <div className="span-4"><MoneySplit data={d.profit} /></div>
+            </>
+          )}
+          <div className="span-4">{weather.data ? <WeatherToday days={weather.data.forecast} /> : <Skeleton height={260} />}</div>
+          <div className="span-4"><TodayTasks today={d.today} /></div>
+          <div className="span-4">{d.receivables ? <Owed data={d.receivables} /> : <StockPanel data={d} />}</div>
+          {d.profit && (
+            <section className="panel span-12" aria-labelledby="dash-enterprises">
+              <div className="panel-head">
+                <div>
+                  <h2 id="dash-enterprises">{t("dash.enterprises")}</h2>
+                  {active && (
+                    <p className="small muted">{t("dash.enterprisesSummary", { best: d.profit.enterprises[0]!.enterprise_id ? d.profit.enterprises[0]!.name : t("common.wholeFarm") })}</p>
+                  )}
+                </div>
+              </div>
+              {active ? <EnterpriseStrip rows={d.profit.enterprises} /> : <EmptyState text={t("dash.noActivity")} />}
+            </section>
+          )}
+          <div className={d.receivables ? "span-7" : "span-12"}><Attention data={d} /></div>
+          {d.receivables && <div className="span-5"><StockPanel data={d} /></div>}
         </div>
       ) : null}
     </>

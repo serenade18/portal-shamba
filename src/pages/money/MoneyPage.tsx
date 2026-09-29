@@ -15,7 +15,7 @@ import { formatMoney, formatMonth, percentChange, today } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { EnterpriseStrip } from "../dashboard/EnterpriseStrip";
-import { useInvalidateOrg } from "../../features/enterprise/forms";
+import { useInvalidateOrg } from "../enterprise/forms";
 import { EntriesTable } from "./EntriesTable";
 
 const COST_CATS = ["labour", "transport", "vet", "utilities", "rent", "repairs", "other"];

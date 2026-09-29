@@ -13,7 +13,7 @@ import { useQty, useT } from "@/i18n";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useCan, useMembership } from "@/stores/session";
 import { toast } from "@/stores/toast";
-import { useInvalidateOrg } from "../../features/enterprise/forms";
+import { useInvalidateOrg } from "../enterprise/forms";
 
 const TENURES: Tenure[] = ["owned", "leased", "family"];
 const STRUCTURES: StructureType[] = ["shed", "poultry_house", "pen", "pond", "store"];
