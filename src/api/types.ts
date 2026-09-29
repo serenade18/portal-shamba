@@ -345,10 +345,15 @@ export interface UnitOption {
   factor: number; // how many base units in one of this unit
 }
 
+export type ItemCategory = "produce" | "feed" | "drug" | "seed" | "fertiliser" | "chemical";
+
 export interface Item {
   id: string;
   name: Record<Locale, string>;
   kind: "input" | "output";
+  category: ItemCategory;
+  /** Enterprise types that produce this item; a sale line defaults to one of them. */
+  produced_by: TypeCode[];
   base_unit: string;
   display_unit: string;
   units: UnitOption[];

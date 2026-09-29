@@ -4,6 +4,7 @@
  */
 import type * as T from "../types";
 import { ITEM_DEFS, TYPE_ITEMS, TYPE_OUTPUT, typeInfo } from "./catalogue";
+import type { TypeCode } from "../types";
 import { at, averageCosts, factorFor, type MEnterprise, type MRecorder, type OrgData } from "./db";
 
 const uid = (): string => crypto.randomUUID();
@@ -15,7 +16,8 @@ export function ensureItems(data: OrgData, codes: string[]) {
     const def = ITEM_DEFS[code];
     if (!def) continue;
     const { code: _code, low, ...rest } = def;
-    data.items.push({ ...rest, id: itemId(code), low_stock_level: low != null ? String(low) : null });
+    const producedBy = (Object.entries(TYPE_OUTPUT) as [TypeCode, { item: string }][]).filter(([, o]) => o.item === code).map(([type]) => type);
+    data.items.push({ ...rest, id: itemId(code), produced_by: producedBy, low_stock_level: low != null ? String(low) : null });
   }
 }
 

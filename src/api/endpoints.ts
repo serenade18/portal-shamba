@@ -62,8 +62,8 @@ export const farms = {
 export const enterprises = {
   list: (q: Q) => http.get<T.Page<T.Enterprise>>("/enterprises", q),
   get: (id: string) => http.get<T.EnterpriseDetail>(`/enterprises/${id}`),
-  records: (id: string) => http.get<T.Page<T.DailyRecord>>(`/enterprises/${id}/records`),
-  health: (id: string) => http.get<T.Page<T.HealthRecord>>(`/enterprises/${id}/health`),
+  records: (id: string, cursor?: string) => http.get<T.Page<T.DailyRecord>>(`/enterprises/${id}/records`, { cursor }),
+  health: (id: string, cursor?: string) => http.get<T.Page<T.HealthRecord>>(`/enterprises/${id}/health`, { cursor }),
   movements: (id: string) => http.get<T.Page<T.StockMovement>>("/stock/movements", { enterprise_id: id }),
   sales: (id: string) => http.get<T.Page<T.Sale>>("/sales", { enterprise_id: id }),
   finance: (id: string) => http.get<T.Page<T.FinanceEntry>>("/finance/entries", { enterprise_id: id }),
@@ -95,10 +95,10 @@ export const batches = {
 export const crops = {
   start: (body: { farm_id: string; type: T.TypeCode; plot_id: string; variety: string; area_acres: string; date: string; name: string }) =>
     http.post<T.Enterprise>("/seasons", body),
-  activities: (id: string) => http.get<T.Page<T.Activity>>(`/seasons/${id}/activities`),
+  activities: (id: string, cursor?: string) => http.get<T.Page<T.Activity>>(`/seasons/${id}/activities`, { cursor }),
   recordActivity: (id: string, body: { date: string; type: T.ActivityType; inputs: { item_id: string; qty: string; unit: string }[]; labour_cost: string; service_cost: string; note: string }) =>
     http.post<T.Activity>(`/seasons/${id}/activities`, body),
-  harvests: (id: string) => http.get<T.Page<T.Harvest>>(`/seasons/${id}/harvests`),
+  harvests: (id: string, cursor?: string) => http.get<T.Page<T.Harvest>>(`/seasons/${id}/harvests`, { cursor }),
   recordHarvest: (id: string, body: { date: string; qty: string; unit: string; moisture: "green" | "dry" }) =>
     http.post<T.Harvest>(`/seasons/${id}/harvests`, body),
 };
