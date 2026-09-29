@@ -44,9 +44,9 @@ export function ChartFrame({ summary, table, children, legend }: { summary: stri
   );
 }
 
-export function BarsChart<R extends Record<string, unknown>>({ data, x, series, format, height = 240, xFormat }: {
-  data: R[];
-  x: keyof R & string;
+export function BarsChart({ data, x, series, format, height = 240, xFormat }: {
+  data: object[];
+  x: string;
   series: Series[];
   format: (v: number) => string;
   xFormat?: (v: string) => string;

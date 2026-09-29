@@ -15,7 +15,7 @@ export function EntriesTable({ rows, hasNext, loadingMore, onMore, showEnterpris
       render: (e) => (
         <span>
           <span className="strong">{t.dyn(`cat.${e.category}`, e.category)}</span>
-          {e.note && <span className="small muted"> · {e.note}</span>}
+          {e.note && <span className="small muted" style={{ display: "block" }}>{e.note}</span>}
         </span>
       ),
     },

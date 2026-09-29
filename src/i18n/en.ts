@@ -665,6 +665,7 @@ const en = {
   "plot.area": "Area (acres)",
   "plot.tenure": "Ownership",
   "plot.lease": "Lease cost per year",
+  "plot.perYear": "{amount} a year",
   "plot.growing": "Growing now",
   "plot.nothing": "Nothing planted",
   "plot.history": "History",

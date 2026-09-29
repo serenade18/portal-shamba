@@ -231,7 +231,7 @@ function seedKamau(): OrgData {
       if (available > 0) {
         const rotation = [hotel, shop, hotel, wanjiru, shop];
         const customer = rotation[(89 - d) % rotation.length];
-        const onCredit = customer === wanjiru && (d === 23 || d < 10);
+        const onCredit = customer === wanjiru && (d === 21 || d < 10);
         const price = customer === hotel ? 400 : 380;
         sell(data, {
           farm, customer, date, lines: [{ item: itemId("eggs"), qty: available, unit: "tray", price, enterprise: layers.id }],

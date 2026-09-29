@@ -114,7 +114,7 @@ function FarmSwitcher() {
                   <span style={{ width: 16 }}>{m.organisation_id === activeOrgId && <Check size={16} aria-hidden />}</span>
                   <span>
                     {m.organisation_name}
-                    <span className="small muted"> · {t.dyn(`role.${m.role}`, m.role)}</span>
+                    <span className="small muted" style={{ display: "block" }}>{t.dyn(`role.${m.role}`, m.role)}</span>
                   </span>
                 </button>
               ))}
@@ -223,10 +223,8 @@ function UserMenu() {
         <>
           <div style={{ padding: "8px 12px" }}>
             <p className="strong">{name}</p>
-            <p className="small muted">
-              {formatPhone(user?.phone)}
-              {membership && ` · ${t.dyn(`role.${membership.role}`, membership.role)}`}
-            </p>
+            <p className="small muted">{formatPhone(user?.phone)}</p>
+            {membership && <p className="small muted">{t.dyn(`role.${membership.role}`, membership.role)}</p>}
           </div>
           <div className="menu-sep" />
           <button type="button" role="menuitem" className="menu-item" onClick={() => (close(), navigate("/settings?tab=you"))}>
