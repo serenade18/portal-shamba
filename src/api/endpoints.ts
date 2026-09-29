@@ -1,0 +1,157 @@
+import { http } from "./client";
+import type * as T from "./types";
+
+type Q = Record<string, string | number | boolean | null | undefined>;
+
+export const auth = {
+  requestOtp: (phone: string, locale: T.Locale) =>
+    http.post<T.OtpRequestResponse>("/auth/otp/request", { phone, locale }, { auth: false, org: false }),
+  verifyOtp: (phone: string, code: string, locale: T.Locale, installId: string) =>
+    http.post<T.SignInResponse>(
+      "/auth/otp/verify",
+      { phone, code, locale, device: { install_id: installId, platform: "web", app_version: "portal-0.1", name: navigator.userAgent.slice(0, 100) } },
+      { auth: false, org: false },
+    ),
+  logout: (refresh: string | null) => http.post<void>("/auth/logout", { refresh: refresh ?? "" }, { org: false }),
+};
+
+export const me = {
+  get: () => http.get<T.User>("/me", undefined, { org: false }),
+  update: (body: Partial<Pick<T.User, "name" | "preferred_locale">>) => http.patch<T.User>("/me", body, { org: false }),
+  organisations: () =>
+    http.get<{ memberships: T.MembershipSummary[]; invitations: T.MyInvitation[] }>("/me/organisations", undefined, { org: false }),
+  acceptInvitation: (id: string) =>
+    http.post<{ memberships: T.MembershipSummary[] }>(`/me/invitations/${id}/accept`, undefined, { org: false }),
+};
+
+export const org = {
+  get: () => http.get<T.Organisation>("/organisation"),
+  update: (body: Partial<Pick<T.Organisation, "name" | "currency" | "default_locale">>) =>
+    http.patch<T.Organisation>("/organisation", body),
+  members: () => http.get<T.Page<T.Member>>("/members"),
+  changeRole: (id: string, role: T.Role) => http.patch<T.Member>(`/members/${id}`, { role }),
+  removeMember: (id: string) => http.del(`/members/${id}`),
+  invitations: () => http.get<T.Page<T.Invitation>>("/invitations"),
+  invite: (phone: string, role: T.Role) => http.post<T.Invitation>("/invitations", { phone, role }),
+  revokeInvitation: (id: string) => http.del(`/invitations/${id}`),
+};
+
+export const payments = {
+  get: (id: string) => http.get<T.PaymentRequest>(`/payments/requests/${id}`),
+  submitOtp: (id: string, code: string) => http.post<T.PaymentRequest>(`/payments/requests/${id}/otp`, { code }),
+};
+
+export const catalogue = {
+  get: () => http.get<T.Catalogue>("/catalogue", undefined, { org: false }),
+};
+
+export const farms = {
+  list: () => http.get<T.Page<T.Farm>>("/farms"),
+  create: (body: { name: string; county: string; location: T.Farm["location"] }) => http.post<T.Farm>("/farms", body),
+  update: (id: string, body: Partial<Pick<T.Farm, "name" | "county" | "location">>) => http.patch<T.Farm>(`/farms/${id}`, body),
+  navigation: (farmId: string) => http.get<T.Navigation>("/navigation", { farm_id: farmId }),
+  onboard: (body: T.OnboardingInput) => http.post<T.Navigation>("/onboarding", body),
+  setTypes: (farmId: string, picks: T.TypeCode[]) => http.post<T.Navigation>(`/farms/${farmId}/types`, { picks }),
+  plots: (farmId: string) => http.get<T.Page<T.Plot>>("/plots", { farm_id: farmId }),
+  createPlot: (body: Omit<T.Plot, "id" | "growing_now">) => http.post<T.Plot>("/plots", body),
+  plotHistory: (plotId: string) => http.get<T.PlotSeasonHistory[]>(`/plots/${plotId}/history`),
+  structures: (farmId: string) => http.get<T.Page<T.Structure>>("/structures", { farm_id: farmId }),
+  createStructure: (body: Omit<T.Structure, "id">) => http.post<T.Structure>("/structures", body),
+};
+
+export const enterprises = {
+  list: (q: Q) => http.get<T.Page<T.Enterprise>>("/enterprises", q),
+  get: (id: string) => http.get<T.EnterpriseDetail>(`/enterprises/${id}`),
+  records: (id: string) => http.get<T.Page<T.DailyRecord>>(`/enterprises/${id}/records`),
+  health: (id: string) => http.get<T.Page<T.HealthRecord>>(`/enterprises/${id}/health`),
+  movements: (id: string) => http.get<T.Page<T.StockMovement>>("/stock/movements", { enterprise_id: id }),
+  sales: (id: string) => http.get<T.Page<T.Sale>>("/sales", { enterprise_id: id }),
+  finance: (id: string) => http.get<T.Page<T.FinanceEntry>>("/finance/entries", { enterprise_id: id }),
+  closeSummary: (id: string) => http.get<T.CloseSummary>(`/enterprises/${id}/close-summary`),
+  close: (id: string) => http.post<T.CloseSummary>(`/enterprises/${id}/close`),
+  production: (id: string) => http.get<{ date: string; qty: number }[]>(`/enterprises/${id}/production`),
+};
+
+export const livestock = {
+  animals: (enterpriseId: string) => http.get<T.Page<T.Animal>>("/animals", { enterprise_id: enterpriseId }),
+  createAnimal: (body: Omit<T.Animal, "id" | "status" | "milk_7d">) => http.post<T.Animal>("/animals", body),
+  exitAnimal: (id: string, body: { reason: "sold" | "dead"; value: string; date: string }) =>
+    http.post<T.Animal>(`/animals/${id}/exit`, body),
+  recordMilk: (body: { enterprise_id: string; date: string; litres: string; animal_id?: string | null }) =>
+    http.post<T.DailyRecord>("/milk-records", body),
+  recordFeed: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string }) =>
+    http.post<T.DailyRecord>("/feeding-records", body),
+  recordTreatment: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string; dose_note: string; subject: string }) =>
+    http.post<T.HealthRecord>("/treatments", body),
+};
+
+export const batches = {
+  start: (body: { farm_id: string; type: T.TypeCode; name: string; count: number; date: string; source: string; cost: string; structure_id: string | null }) =>
+    http.post<T.Enterprise>("/batches", body),
+  recordDay: (id: string, body: { date: string; feed_item_id: string | null; feed_qty: string; feed_unit: string; deaths: number; eggs_trays: string; note: string }) =>
+    http.post<T.DailyRecord>(`/batches/${id}/days`, body),
+};
+
+export const crops = {
+  start: (body: { farm_id: string; type: T.TypeCode; plot_id: string; variety: string; area_acres: string; date: string; name: string }) =>
+    http.post<T.Enterprise>("/seasons", body),
+  activities: (id: string) => http.get<T.Page<T.Activity>>(`/seasons/${id}/activities`),
+  recordActivity: (id: string, body: { date: string; type: T.ActivityType; inputs: { item_id: string; qty: string; unit: string }[]; labour_cost: string; service_cost: string; note: string }) =>
+    http.post<T.Activity>(`/seasons/${id}/activities`, body),
+  harvests: (id: string) => http.get<T.Page<T.Harvest>>(`/seasons/${id}/harvests`),
+  recordHarvest: (id: string, body: { date: string; qty: string; unit: string; moisture: "green" | "dry" }) =>
+    http.post<T.Harvest>(`/seasons/${id}/harvests`, body),
+};
+
+export const stock = {
+  items: () => http.get<T.Page<T.Item>>("/items"),
+  updateItem: (id: string, body: { low_stock_level: string | null }) => http.patch<T.Item>(`/items/${id}`, body),
+  balances: (farmId: string) => http.get<T.Page<T.StockBalance>>("/stock/balances", { farm_id: farmId }),
+  movements: (q: Q) => http.get<T.Page<T.StockMovement>>("/stock/movements", q),
+  reverse: (id: string) => http.post<T.StockMovement>(`/stock/movements/${id}/reverse`),
+  count: (body: { farm_id: string; date: string; lines: { item_id: string; counted: string; unit: string }[] }) =>
+    http.post<{ adjustments: number }>("/stock/counts", body),
+  transfer: (body: { farm_id: string; item_id: string; qty: string; unit: string; from_enterprise_id: string | null; to_enterprise_id: string; unit_price: string; date: string }) =>
+    http.post<void>("/stock/transfers", body),
+};
+
+export const sales = {
+  list: (q: Q) => http.get<T.Page<T.Sale>>("/sales", q),
+  get: (id: string) => http.get<T.Sale>(`/sales/${id}`),
+  create: (body: T.NewSaleInput) => http.post<T.Sale>("/sales", body),
+  addPayment: (id: string, body: { method: T.PaymentMethod; amount: string; phone?: string; code?: string }) =>
+    http.post<T.Sale>(`/sales/${id}/payments`, body),
+  customers: () => http.get<T.Page<T.Party>>("/customers"),
+  createCustomer: (body: { name: string; phone: string }) => http.post<T.Party>("/customers", body),
+};
+
+export const purchases = {
+  list: (q: Q) => http.get<T.Page<T.Purchase>>("/purchases", q),
+  create: (body: T.NewPurchaseInput) => http.post<T.Purchase>("/purchases", body),
+  pay: (id: string, amount: string) => http.post<T.Purchase>(`/purchases/${id}/payments`, { amount }),
+  suppliers: () => http.get<T.Page<T.Party>>("/suppliers"),
+  createSupplier: (body: { name: string; phone: string }) => http.post<T.Party>("/suppliers", body),
+};
+
+export const finance = {
+  entries: (q: Q) => http.get<T.Page<T.FinanceEntry>>("/finance/entries", q),
+  create: (body: { farm_id: string; kind: "revenue" | "cost"; category: string; amount: string; occurred_on: string; enterprise_id: string | null; note: string }) =>
+    http.post<T.FinanceEntry>("/finance/entries", body),
+  profit: (q: Q) => http.get<T.ProfitReport>("/reports/profit", q),
+  costPerUnit: (q: Q) => http.get<T.CostPerUnit[]>("/reports/cost-per-unit", q),
+  export: (body: { farm_id: string; from: string; to: string; kinds: string[] }) =>
+    http.post<{ files: { name: string; csv: string }[] }>("/exports", body),
+};
+
+export const weather = {
+  get: (farmId: string) => http.get<T.Weather>("/weather", { farm_id: farmId }),
+};
+
+export const alerts = {
+  list: (farmId: string) => http.get<T.Page<T.Alert>>("/alerts", { farm_id: farmId }),
+  seen: (id: string) => http.post<T.Alert>(`/alerts/${id}/seen`),
+};
+
+export const dashboard = {
+  get: (q: { farm_id: string; from: string; to: string }) => http.get<T.Dashboard>("/dashboard", q),
+};

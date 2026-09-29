@@ -1,0 +1,162 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+h2 {
+  font-size: var(--fs-heading);
+  line-height: var(--lh-heading);
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+h3 {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 700;
+}
+
+a {
+  color: var(--green-800);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--green-800);
+  outline-offset: 2px;
+}
+
+.num,
+input[type="number"],
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.small {
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.strong {
+  font-weight: 500;
+}
+
+.display {
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+}
+
+@media (max-width: 1279px) {
+  .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ink-revenue {
+  color: var(--revenue-ink);
+}
+.ink-cost {
+  color: var(--cost-ink);
+}
+.ink-profit {
+  color: var(--profit-ink);
+}
+.ink-loss {
+  color: var(--loss-ink);
+}
+.ink-sky {
+  color: var(--sky-ink);
+}
+.ink-health {
+  color: var(--health-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

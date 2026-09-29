@@ -4,6 +4,8 @@
 
 The web portal is where owners and managers see how the farm is doing and manage the business side: money, stock, customers, suppliers and people. Daily field recording happens in the Flutter app; the portal is for reviewing, correcting, selling, buying and deciding.
 
+build frontend on Vite + TypeScript with zustand and React Query 
+
 Brand line: **Manage. Grow. Thrive.**
 
 ---

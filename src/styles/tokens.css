@@ -1,0 +1,80 @@
+/* Shamba OS design tokens (build.md sections 3 to 5). Components never use raw hex. */
+:root {
+  /* Primary */
+  --green-900: #1f382c; /* Deep Forest */
+  --green-800: #355442; /* Forest Green */
+  --green-600: #4f765b; /* Leaf Green */
+  --green-400: #78a66a; /* Fresh Green */
+  --green-100: #dce8de; /* Soft Sage */
+
+  /* Neutral */
+  --bg: #f8f7f2; /* Cream */
+  --surface: #ffffff; /* Warm White */
+  --surface-2: #eeebdd; /* Sand */
+  --border: #d8d6c8; /* Stone */
+  --text-muted: #7b817a; /* Muted Gray: icons, placeholders, large text only */
+  --text: #202722; /* Charcoal */
+  --text-secondary: #5f655e;
+
+  /* Semantic and accent: fills use these */
+  --amber: #d99a32;
+  --terracotta: #b96545;
+  --sky: #5c91a6;
+  --health: #4d9561;
+  --lavender: #8a7cc7;
+
+  /* Ink variants: text uses these (W1: confirm with a contrast checker) */
+  --amber-ink: #8a5a10;
+  --terracotta-ink: #9a4f33;
+  --sky-ink: #3f6f82;
+  --health-ink: #3a7549;
+  --lavender-ink: #6456a8;
+
+  /* Money (3.3) */
+  --revenue: var(--amber);
+  --revenue-ink: var(--amber-ink);
+  --cost: var(--terracotta);
+  --cost-ink: var(--terracotta-ink);
+  --profit: var(--green-400);
+  --profit-ink: var(--green-600);
+  --loss: var(--terracotta);
+  --loss-ink: var(--terracotta-ink);
+
+  /* Gradients (3.4): only these two places */
+  --gradient-forest: linear-gradient(160deg, #1f382c 0%, #4f765b 100%);
+  --gradient-sky: linear-gradient(160deg, #5c91a6 0%, #8fbed0 100%);
+
+  /* Type (4) */
+  --font: Figtree, "Segoe UI", Roboto, system-ui, sans-serif;
+  --fs-display: 32px;
+  --lh-display: 40px;
+  --fs-title: 24px;
+  --lh-title: 32px;
+  --fs-heading: 18px;
+  --lh-heading: 26px;
+  --fs-body: 15px;
+  --lh-body: 24px;
+  --fs-small: 13px;
+  --lh-small: 20px;
+
+  /* Space (5) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-chip: 999px;
+
+  --shadow-overlay: 0 12px 32px rgb(31 56 44 / 0.18), 0 2px 6px rgb(31 56 44 / 0.08);
+
+  --sidebar-w: 240px;
+  --sidebar-w-icons: 72px;
+  --topbar-h: 64px;
+  --content-max: 1200px;
+}
