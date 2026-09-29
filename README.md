@@ -24,7 +24,13 @@ The portal signs in with **email or username and password** (`/auth/login`, `/au
 | `otieno` | Otieno, field worker (no money anywhere) |
 | Create an account | a new user: goes through farm setup and "What's on your farm?" |
 
-The password for the demo accounts is `shamba123`. In demo mode a reset link is printed to the browser console. Demo data lives in the browser's localStorage; clear site data to reset it.
+The password for the demo accounts is `shamba123`. The staff admin (below) signs in as `admin@shambaos.co.ke` / `shamba-admin`. In demo mode a reset link is printed to the browser console. Demo data lives in the browser's localStorage; clear site data to reset it.
+
+## Staff admin
+
+Shamba OS staff sign in at **`/admin/sign-in`** with a staff email and password (`POST /auth/staff/login`; only accounts with `is_staff` get in). The staff session is stored apart from the farmer session (`src/stores/adminSession.ts`), so an admin and a farmer can be signed in in the same browser without affecting each other, and admin requests never carry a farmer's token or `X-Org-Id`.
+
+`/admin` shows platform analytics from `GET /staff/analytics?days=7|30|90`: farmers, farm accounts, active farmers, M-Pesa collected and success rate, pending invitations; new farmers, active farmers and M-Pesa collected per day; an activation funnel; devices, languages and roles; payment outcomes; latest sign-ups and the largest farm accounts. Against Django, create a staff account with `python manage.py createsuperuser` in shambaos-backend. In demo mode the numbers are generated and marked "Demo data".
 
 ## Against the real backend
 

@@ -582,3 +582,41 @@ export interface Dashboard {
   today: TodayRecord[];
   stock: StockBalance[];
 }
+
+/* ---------- Staff admin (GET /staff/analytics) ---------- */
+
+export type AnalyticsDays = 7 | 30 | 90;
+
+export interface StaffAnalytics {
+  days: AnalyticsDays;
+  from: string;
+  to: string;
+  generated_at: string;
+  currency: string;
+  totals: {
+    farmers: { total: number; new: number; previous_new: number };
+    organisations: { total: number; new: number; previous_new: number };
+    active_farmers: { count: number; previous: number };
+    payments: { collected: string; previous_collected: string; requests: number; succeeded: number; success_rate: number | null };
+    pending_invitations: number;
+  };
+  daily: { date: string; signups: number; organisations: number; active_farmers: number; collected: string }[];
+  funnel: { step: "signed_up" | "farm_account" | "added_member" | "requested_payment"; count: number }[];
+  platforms: { platform: "android" | "ios" | "web"; devices: number; farmers: number }[];
+  languages: { locale: Locale; farmers: number }[];
+  roles: { role: Role; members: number }[];
+  payment_statuses: { status: "pending" | "awaiting_otp" | "succeeded" | "failed" | "expired"; count: number }[];
+  recent_signups: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string | null;
+    username: string | null;
+    date_joined: string;
+    organisation: string | null;
+    role: Role | null;
+    platform: "android" | "ios" | "web" | null;
+    last_seen_at: string | null;
+  }[];
+  top_organisations: { id: string; name: string; created_at: string; members: number; owner: string | null; collected: string }[];
+}

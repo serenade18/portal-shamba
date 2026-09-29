@@ -350,6 +350,18 @@ After sign-up the owner names the farm and sets its location (FRM-01), then choo
 
 API: `POST /auth/login` `{identifier, password, device}`, `POST /auth/register` `{name, email, username, phone, password, locale, device}` (both return the same session payload), `POST /auth/password/forgot` `{email, locale}` (202), and `POST /auth/password/reset` `{uid, token, password}` (204) from the emailed link, which opens `/reset-password?uid=…&token=…`. A reset signs the account out on every device.
 
+### 7.7a Staff admin
+
+Shamba OS staff have their own door: `/admin/sign-in` (staff email and password) and their own session, separate from any farm account signed in in the same browser. The staff area uses a Charcoal top bar with a "Staff admin" badge, so it is never mistaken for a farm account; the sign-in panel uses the same photo under a Charcoal scrim. Lavender (insights and analytics, 3.1) is the accent.
+
+**Platform analytics (`/admin`).** Period switch (7, 30, 90 days) and refresh.
+
+- Six tiles: farmers (new in period, change on the previous period), farm accounts, active farmers (share of all farmers), M-Pesa collected, payment success rate, pending invitations.
+- New farmers per day (lavender columns), active farmers per day (Forest Green line), M-Pesa collected per day (amber columns). Each plots one measure, so one hue and no legend; hover shows exact values and "Show the numbers" opens a table.
+- Activation: of the farmers who joined in the period, how many have a farm account, invited someone, requested an M-Pesa payment.
+- Devices in use, language and members by role as labelled bars; payment requests by outcome as one stacked bar with status colours, icons and counts.
+- Latest sign-ups and largest farm accounts as tables.
+
 ### 7.8 Choose what you're dealing with (first run)
 
 Right after account setup, the farmer chooses what their farm keeps and grows. This is a required step: at least one choice is needed before the portal opens, because every menu, screen and dashboard figure depends on it (ONB-02, ONB-04).
