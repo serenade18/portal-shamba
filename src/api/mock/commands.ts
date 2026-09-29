@@ -70,7 +70,7 @@ export function financeEntry(
     enterprise_id: e.enterprise,
     kind: e.kind,
     category: e.category,
-    amount: Math.round(e.amount * 100) / 100,
+    amount: Math.round(e.amount), // whole shillings, like the real ledger
     occurred_on: e.date,
     note: e.note ?? "",
     source_type: e.source,

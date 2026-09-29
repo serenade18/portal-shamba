@@ -14,7 +14,7 @@ import { useQty, useT } from "@/i18n";
 import { formatDate, formatMoney, today } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
-import { useInvalidateOrg } from "../enterprise/forms";
+import { useInvalidateOrg } from "../../features/enterprise/forms";
 import { PartiesTable } from "../sales/SalesPage";
 import { PartyPicker, type NewParty } from "../sales/PartyPicker";
 

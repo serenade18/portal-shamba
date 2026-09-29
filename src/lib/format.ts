@@ -28,7 +28,10 @@ export function formatDate(iso: string | null | undefined, locale: Locale, opts:
   }).format(d);
 }
 
+const SW_WEEKDAYS = ["Jpili", "Jtatu", "Jnne", "Jtano", "Alh", "Ijm", "Jmos"];
+
 export function formatWeekday(iso: string, locale: Locale): string {
+  if (locale === "sw") return SW_WEEKDAYS[new Date(`${iso}T12:00:00`).getDay()]!;
   return new Intl.DateTimeFormat(intlLocale(locale), { weekday: "short" }).format(new Date(`${iso}T12:00:00`));
 }
 

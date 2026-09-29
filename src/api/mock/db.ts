@@ -183,7 +183,7 @@ export interface MockDb {
 }
 
 const KEY = "shamba-mock-db";
-const VERSION = 4;
+const VERSION = 5;
 
 let db: MockDb | null = null;
 

@@ -4,7 +4,7 @@ import type { EnterpriseProfit } from "@/api/types";
 import { Chip } from "@/components/ui/feedback";
 import { Money } from "@/components/ui/data";
 import { useT } from "@/i18n";
-import { enterprisePath } from "../enterprise/paths";
+import { enterprisePath } from "../../features/enterprise/paths";
 
 /**
  * The signature element (7.1): one row per enterprise, a cost bar and a

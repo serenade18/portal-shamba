@@ -359,6 +359,9 @@
   border-top: 1px solid var(--border);
   vertical-align: middle;
 }
+.table td:first-child {
+  white-space: nowrap;
+}
 .table .n {
   text-align: right;
   font-variant-numeric: tabular-nums;

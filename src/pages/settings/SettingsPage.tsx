@@ -18,7 +18,7 @@ import { formatPhone } from "@/lib/phone";
 import { useCan, useMembership, useSession } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useUi } from "@/stores/ui";
-import { FarmForm } from "../auth/FarmSetup";
+import { FarmForm } from "../../pages/auth/FarmSetup";
 import { useInvalidateOrg } from "../enterprise/forms";
 import { TypeTiles } from "../onboarding/TypeTiles";
 

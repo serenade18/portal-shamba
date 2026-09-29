@@ -7,7 +7,7 @@ import type { Dashboard as DashboardData, TodayRecord } from "@/api/types";
 import { ButtonLink } from "@/components/ui/Button";
 import { Money, PageHead, Panel, useCurrency } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, Skeleton } from "@/components/ui/feedback";
-import { AlertRow } from "@/features/alerts/AlertRow";
+import { AlertRow } from "@/pages/alerts/AlertRow";
 import { useQty, useT } from "@/i18n";
 import { formatDate, formatMoney, percentChange } from "@/lib/format";
 import { useCan } from "@/stores/session";
@@ -193,11 +193,11 @@ export function Dashboard() {
                 <div className="panel-section" style={{ borderTop: "1px solid var(--border)" }}>
                   <div style={{ padding: "16px 20px 8px" }}>
                     <h2>{t("dash.enterprises")}</h2>
-                    {q.data.profit.enterprises.length > 0 && (
+                    {q.data.profit.enterprises.some((e) => Number(e.cost) || Number(e.revenue)) && (
                       <p className="small muted">{t("dash.enterprisesSummary", { best: q.data.profit.enterprises[0]!.enterprise_id ? q.data.profit.enterprises[0]!.name : t("common.wholeFarm") })}</p>
                     )}
                   </div>
-                  {q.data.profit.enterprises.length ? <EnterpriseStrip rows={q.data.profit.enterprises} /> : <EmptyState text={t("dash.noActivity")} />}
+                  {q.data.profit.enterprises.some((e) => Number(e.cost) || Number(e.revenue)) ? <EnterpriseStrip rows={q.data.profit.enterprises} /> : <EmptyState text={t("dash.noActivity")} />}
                 </div>
               </section>
             </>

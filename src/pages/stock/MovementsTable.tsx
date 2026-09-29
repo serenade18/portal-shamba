@@ -51,9 +51,8 @@ export function MovementsTable({ rows, hasNext, loadingMore, onMore, showItem = 
       label: "",
       render: (m) => (
         <span className="row" style={{ gap: 6 }}>
-          <span className="strike">{t(`mv.${m.movement_type}`)}</span>
+          {m.movement_type === "reversal" ? <Chip tone="lavender">{t("stock.correction")}</Chip> : <span className="strike">{t(`mv.${m.movement_type}`)}</span>}
           {m.reversed_by_id && <Chip tone="lavender">{t("stock.corrected")}</Chip>}
-          {m.movement_type === "reversal" && <Chip tone="lavender">{t("stock.correction")}</Chip>}
         </span>
       ),
     },

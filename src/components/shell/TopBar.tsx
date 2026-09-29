@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router";
 import { useFarm, useKey } from "@/api/hooks";
 import * as api from "@/api/endpoints";
 import type { Locale } from "@/api/types";
-import { AlertRow } from "@/features/alerts/AlertRow";
+import { AlertRow } from "@/pages/alerts/AlertRow";
 import { useT } from "@/i18n";
 import { formatPhone } from "@/lib/phone";
 import { initials } from "@/lib/format";
@@ -136,7 +136,7 @@ function RangePicker() {
     <Dropdown
       label={t("range.label")}
       trigger={(open, toggle) => (
-        <button type="button" className="top-trigger" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
+        <button type="button" className="top-trigger icon-sm" aria-haspopup="menu" aria-expanded={open} onClick={toggle} aria-label={t(`range.${range}`)}>
           <Calendar size={16} aria-hidden className="muted" />
           <span className="label">{t(`range.${range}`)}</span>
           <ChevronDown size={16} aria-hidden />

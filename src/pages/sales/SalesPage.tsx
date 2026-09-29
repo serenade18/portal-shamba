@@ -15,7 +15,7 @@ import { formatDate, formatMoney, today } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
-import { useInvalidateOrg } from "../enterprise/forms";
+import { useInvalidateOrg } from "../../features/enterprise/forms";
 import { MpesaStatus } from "./MpesaStatus";
 import { PartyPicker, type NewParty } from "./PartyPicker";
 import { SaleStatusChip, SalesTable } from "./SalesTable";

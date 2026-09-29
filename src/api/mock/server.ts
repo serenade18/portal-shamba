@@ -887,7 +887,8 @@ function balanceRows(ctx: Ctx, farmId: string): T.StockBalance[] {
     .filter((b) => relevant.has(b.item.id) || Math.abs(b.qty) > 0.0001)
     .map((b) => {
       const low = b.item.low_stock_level != null ? Number(b.item.low_stock_level) : null;
-      const status = b.qty < -0.0001 ? "negative" : low != null && b.qty < low ? "low" : "ok";
+      const handled = d.movements.some((m) => m.item_id === b.item.id && m.farm_id === farmId);
+      const status = b.qty < -0.0001 ? "negative" : handled && low != null && b.qty < low ? "low" : "ok";
       const df = factorFor(b.item, b.item.display_unit);
       return {
         item_id: b.item.id, item_name: b.item.name, location: b.location, enterprise_id: null, enterprise_name: null,

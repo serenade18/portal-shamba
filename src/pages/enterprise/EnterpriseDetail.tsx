@@ -14,9 +14,9 @@ import { Dialog } from "@/components/ui/overlay";
 import { useQty, useT } from "@/i18n";
 import { formatDate, formatNumber, formatMoney, daysSince } from "@/lib/format";
 import { useCan } from "@/stores/session";
-import { EntriesTable } from "../money/EntriesTable";
-import { SalesTable } from "../sales/SalesTable";
-import { MovementsTable } from "../stock/MovementsTable";
+import { EntriesTable } from "../../pages/money/EntriesTable";
+import { SalesTable } from "../../pages/sales/SalesTable";
+import { MovementsTable } from "../../pages/stock/MovementsTable";
 import {
   AddAnimalPanel, AnimalExitPanel, ClosePanel, RecordActivityPanel, RecordDayPanel, RecordFeedPanel, RecordHarvestPanel, RecordMilkPanel,
   RecordTreatmentPanel,

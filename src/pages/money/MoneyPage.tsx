@@ -15,7 +15,7 @@ import { formatMoney, formatMonth, percentChange, today } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { EnterpriseStrip } from "../dashboard/EnterpriseStrip";
-import { useInvalidateOrg } from "../enterprise/forms";
+import { useInvalidateOrg } from "../../features/enterprise/forms";
 import { EntriesTable } from "./EntriesTable";
 
 const COST_CATS = ["labour", "transport", "vet", "utilities", "rent", "repairs", "other"];
@@ -115,7 +115,7 @@ function ProfitTab() {
             />
           }
         >
-          <BarsChart data={monthly} x="month" xFormat={(m) => formatMonth(m, t.locale)} series={series} format={(v) => formatMoney(v, currency)} />
+          <BarsChart data={monthly} x="month" xFormat={(m) => formatMonth(m, t.locale)} series={series} format={(v) => formatMoney(v, currency)} axisFormat={(v) => `${currency} ${Intl.NumberFormat("en", { notation: "compact" }).format(v)}`} />
         </ChartFrame>
       </Panel>
     </div>

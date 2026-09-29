@@ -9,7 +9,14 @@ import { Button } from "./Button";
  * so every chart ships a legend, tooltips and the table view.
  */
 
-const AXIS = { fontSize: 12, fill: "var(--text-secondary)" };
+/** SVG attributes can't resolve var(); read the token's value instead. */
+function token(value: string): string {
+  const m = /^var\((--[\w-]+)\)$/.exec(value);
+  if (!m) return value;
+  return getComputedStyle(document.documentElement).getPropertyValue(m[1]!).trim() || value;
+}
+
+const axis = () => ({ fontSize: 12, fill: token("var(--text-secondary)") });
 
 export interface Series {
   key: string;
@@ -44,7 +51,8 @@ export function ChartFrame({ summary, table, children, legend }: { summary: stri
   );
 }
 
-export function BarsChart({ data, x, series, format, height = 240, xFormat }: {
+export function BarsChart({ data, x, series, format, axisFormat, height = 240, xFormat }: {
+  axisFormat?: (v: number) => string;
   data: object[];
   x: string;
   series: Series[];
@@ -56,9 +64,9 @@ export function BarsChart({ data, x, series, format, height = 240, xFormat }: {
     <div style={{ width: "100%", height }}>
       <ResponsiveContainer>
         <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }} barGap={2} barCategoryGap="24%">
-          <CartesianGrid stroke="var(--border)" vertical={false} />
-          <XAxis dataKey={x} tick={AXIS} tickLine={false} axisLine={{ stroke: "var(--border)" }} tickFormatter={xFormat} interval="preserveStartEnd" minTickGap={12} />
-          <YAxis tick={AXIS} tickLine={false} axisLine={false} tickFormatter={(v) => format(Number(v))} width={72} />
+          <CartesianGrid stroke={token("var(--border)")} vertical={false} />
+          <XAxis dataKey={x} tick={axis()} tickLine={false} axisLine={{ stroke: token("var(--border)") }} tickFormatter={xFormat} interval="preserveStartEnd" minTickGap={12} />
+          <YAxis tick={axis()} tickLine={false} axisLine={false} tickFormatter={(v) => (axisFormat ?? format)(Number(v))} width={64} domain={[0, "auto"]} allowDecimals={false} />
           <Tooltip
             cursor={{ fill: "rgb(220 232 222 / 0.5)" }}
             formatter={(v, name) => [format(Number(v)), series.find((s) => s.key === name)?.label ?? String(name)]}
@@ -66,7 +74,7 @@ export function BarsChart({ data, x, series, format, height = 240, xFormat }: {
             contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontFamily: "var(--font)", fontSize: 13 }}
           />
           {series.map((s) => (
-            <Bar key={s.key} dataKey={s.key} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={!window.matchMedia("(prefers-reduced-motion: reduce)").matches} />
+            <Bar key={s.key} dataKey={s.key} fill={token(s.color)} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={!window.matchMedia("(prefers-reduced-motion: reduce)").matches} />
           ))}
         </BarChart>
       </ResponsiveContainer>
