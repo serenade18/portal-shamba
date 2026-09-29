@@ -338,7 +338,12 @@
   min-height: 100vh;
 }
 .split-brand {
-  background: var(--gradient-forest);
+  /* The farmer photo under a Deep Forest scrim: darker at the top for the
+     logo and at the bottom for the brand line, lighter over her face. */
+  background:
+    linear-gradient(180deg, rgb(31 56 44 / 0.78) 0%, rgb(31 56 44 / 0.2) 30%, rgb(31 56 44 / 0.25) 55%, rgb(31 56 44 / 0.92) 100%),
+    url("/brand/auth-background.webp") 42% 30% / cover no-repeat,
+    var(--green-900);
   color: var(--surface);
   padding: var(--s-7);
   display: flex;
@@ -452,6 +457,12 @@
   }
   .split-brand {
     padding: var(--s-5) var(--s-4);
+    min-height: 240px;
+    /* A short strip: text covers most of the photo, so tint it evenly. */
+    background:
+      linear-gradient(180deg, rgb(31 56 44 / 0.72) 0%, rgb(31 56 44 / 0.6) 50%, rgb(31 56 44 / 0.85) 100%),
+      url("/brand/auth-background.webp") 60% 22% / cover no-repeat,
+      var(--green-900);
   }
   .split-brand .line {
     font-size: 28px;
