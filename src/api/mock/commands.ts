@@ -6,7 +6,7 @@ import type * as T from "../types";
 import { ITEM_DEFS, TYPE_ITEMS, TYPE_OUTPUT, typeInfo } from "./catalogue";
 import { at, averageCosts, factorFor, type MEnterprise, type MRecorder, type OrgData } from "./db";
 
-const uid = () => crypto.randomUUID();
+const uid = (): string => crypto.randomUUID();
 export const itemId = (code: string) => `item_${code}`;
 
 export function ensureItems(data: OrgData, codes: string[]) {

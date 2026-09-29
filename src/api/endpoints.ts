@@ -140,7 +140,7 @@ export const finance = {
   profit: (q: Q) => http.get<T.ProfitReport>("/reports/profit", q),
   costPerUnit: (q: Q) => http.get<T.CostPerUnit[]>("/reports/cost-per-unit", q),
   export: (body: { farm_id: string; from: string; to: string; kinds: string[] }) =>
-    http.post<{ files: { name: string; csv: string }[] }>("/exports", body),
+    http.post<{ files: { name: string; url: string }[] }>("/exports", body),
 };
 
 export const weather = {
