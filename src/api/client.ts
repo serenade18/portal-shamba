@@ -1,4 +1,5 @@
 import { useSession } from "@/stores/session";
+import { useUi } from "@/stores/ui";
 import type { ApiErrorBody } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
@@ -8,7 +9,7 @@ export const MOCK_MODE = (import.meta.env.VITE_MOCK ?? "none") as MockMode;
 /** Routes the Django backend serves today. With VITE_MOCK=missing, everything else is mocked. */
 const IMPLEMENTED = [
   /^\/health$/,
-  /^\/auth\//,
+  /^\/auth\//, // phone codes, token refresh, logout, and the portal's password sign-in, sign-up and reset
   /^\/me$/,
   /^\/me\/organisations$/,
   /^\/me\/invitations\/[^/]+\/accept$/,
@@ -83,7 +84,8 @@ export async function sendNetwork(req: RawRequest): Promise<{ status: number; bo
 
 function buildRequest(method: string, path: string, opts: RequestOptions): RawRequest {
   const s = useSession.getState();
-  const headers: Record<string, string> = {};
+  // Django localises its messages (field errors included) by Accept-Language.
+  const headers: Record<string, string> = { "Accept-Language": useUi.getState().locale };
   if (opts.auth !== false && s.access) headers.Authorization = `Bearer ${s.access}`;
   if (opts.org !== false && s.activeOrgId) headers["X-Org-Id"] = s.activeOrgId;
   const query = new URLSearchParams();

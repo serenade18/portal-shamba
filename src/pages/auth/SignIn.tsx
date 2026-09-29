@@ -1,18 +1,19 @@
 import { useMutation } from "@tanstack/react-query";
-import { Eye, EyeOff, MailCheck } from "lucide-react";
+import { MailCheck } from "lucide-react";
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { MOCK_MODE } from "@/api/client";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useErrorText } from "@/api/hooks";
 import type { SignInResponse } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/feedback";
-import { Field, FormError, Segmented, TextField } from "@/components/ui/forms";
+import { FormError, Segmented, TextField } from "@/components/ui/forms";
 import { useT } from "@/i18n";
 import { normalizePhone } from "@/lib/phone";
 import { useSession } from "@/stores/session";
 import { useUi } from "@/stores/ui";
+import { PasswordField } from "./PasswordField";
 import { SplitLayout } from "./SplitLayout";
 
 type Mode = "signin" | "register" | "forgot" | "sent";
@@ -20,33 +21,7 @@ type Mode = "signin" | "register" | "forgot" | "sent";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME = /^[a-z0-9._]{3,30}$/i;
 
-function PasswordField({ label, value, onChange, error, hint, autoComplete }: { label: string; value: string; onChange: (v: string) => void; error?: string; hint?: string; autoComplete: string }) {
-  const t = useT();
-  const [shown, setShown] = useState(false);
-  return (
-    <Field label={label} error={error} hint={hint}>
-      {(id, describedBy, invalid) => (
-        <div className="password-wrap">
-          <input
-            id={id}
-            className="input"
-            type={shown ? "text" : "password"}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            autoComplete={autoComplete}
-            aria-describedby={describedBy}
-            aria-invalid={invalid || undefined}
-          />
-          <button type="button" className="password-toggle" onClick={() => setShown((s) => !s)} aria-label={shown ? t("auth.hidePassword") : t("auth.showPassword")} aria-pressed={shown}>
-            {shown ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
-          </button>
-        </div>
-      )}
-    </Field>
-  );
-}
-
-function Heading({ title, help }: { title: string; help?: string }) {
+export function Heading({ title, help }: { title: string; help?: string }) {
   return (
     <div className="stack" style={{ gap: 4 }}>
       <h1>{title}</h1>
@@ -67,7 +42,9 @@ export function SignIn() {
   const locale = useUi((s) => s.locale);
   const setLocale = useUi((s) => s.setLocale);
 
-  const [mode, setMode] = useState<Mode>("signin");
+  const [params] = useSearchParams();
+  const [mode, setMode] = useState<Mode>(params.get("mode") === "forgot" ? "forgot" : "signin");
+  const passwordChanged = (location.state as { passwordReset?: boolean } | null)?.passwordReset;
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [reg, setReg] = useState({ name: "", email: "", username: "", phone: "", password: "" });
@@ -137,6 +114,7 @@ export function SignIn() {
       {mode === "signin" && (
         <form className="stack-lg" noValidate onSubmit={(e) => (e.preventDefault(), submitLogin())}>
           <Heading title={t("auth.signInTitle")} help={t("auth.signInHelp")} />
+          {passwordChanged && <Notice tone="health">{t("auth.passwordChanged")}</Notice>}
           <TextField label={t("auth.identifier")} value={identifier} onChange={setIdentifier} autoComplete="username" autoCapitalize="none" spellCheck={false} error={errors.identifier} autoFocus />
           <div className="stack" style={{ gap: 8 }}>
             <PasswordField label={t("auth.password")} value={password} onChange={setPassword} autoComplete="current-password" error={errors.password} />
