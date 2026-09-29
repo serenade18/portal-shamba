@@ -6,6 +6,7 @@ import type en from "./en";
  */
 const sw: Record<keyof typeof en, string> = {
   "brand.line": "Simamia. Kuza. Stawi.",
+  "brand.tagline": "Kilimo Mahiri",
 
   "common.save": "Hifadhi",
   "common.saving": "Inahifadhi…",

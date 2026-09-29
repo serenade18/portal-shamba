@@ -12,6 +12,7 @@ import { Field, FormError } from "@/components/ui/forms";
 import { useT, type MsgKey } from "@/i18n";
 import { useMembership } from "@/stores/session";
 import { TypeTiles } from "./TypeTiles";
+import { Brand } from "@/components/shell/Brand";
 
 function countQuestion(type: EnterpriseType): MsgKey {
   if (type.module === "livestock") return "counts.animals";
@@ -65,8 +66,7 @@ export function Onboarding() {
   return (
     <div className="onboard">
       <div className="onboard-top">
-        <img src="/logo.svg" alt="" />
-        Shamba OS
+        <Brand />
         <span style={{ flex: 1 }} />
         <span className="small" style={{ fontWeight: 500, opacity: 0.85 }}>{farm?.name}</span>
       </div>

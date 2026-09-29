@@ -1,5 +1,6 @@
 const en = {
   "brand.line": "Manage. Grow. Thrive.",
+  "brand.tagline": "Intelligent Farming",
 
   "common.save": "Save",
   "common.saving": "Saving…",

@@ -5,6 +5,7 @@ import { useT } from "@/i18n";
 import { cx } from "@/lib/format";
 import { useUi } from "@/stores/ui";
 import { useNavItems, type NavItem } from "./nav";
+import { Brand } from "./Brand";
 import { TopBar } from "./TopBar";
 
 function NavEntry({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
@@ -53,8 +54,7 @@ export function AppShell() {
       {drawerOpen && <div className="overlay" onClick={close} style={{ zIndex: 54 }} />}
       <nav className={cx("sidebar", drawerOpen && "open")} aria-label={t("nav.main")}>
         <NavLink to="/" className="brand" onClick={close}>
-          <img src="/logo.svg" alt="" />
-          <span>Shamba OS</span>
+          <Brand />
         </NavLink>
         {main.map((item) => (
           <NavEntry key={item.to} item={item} onNavigate={close} />
