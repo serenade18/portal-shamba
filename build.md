@@ -189,7 +189,7 @@ Focus ring: 2 px Forest Green outline with 2 px offset, on every interactive ele
 │  Poultry & fish│  ┌────────────────────────────────────────────────────┐  │
 │  Crops         │  │                                                    │  │
 │  Stock         │  │                 Page content                       │  │
-│  Sales         │  │           (max width 1200 px, left aligned)        │  │
+│  Sales         │  │           (full width, edges aligned with top bar)        │  │
 │  Purchases     │  │                                                    │  │
 │  Money         │  └────────────────────────────────────────────────────┘  │
 │  Weather       │                                                          │
@@ -200,7 +200,7 @@ Focus ring: 2 px Forest Green outline with 2 px offset, on every interactive ele
 
 - **Sidebar:** Deep Forest background, white text, 240 px wide. The selected item uses a Forest Green fill with a 4 px Fresh Green left edge. The logo mark sits at the top.
 - **Top bar:** White with a Stone bottom border. Farm switcher (and organisation switcher when the user has several, ACC-07), date range, language toggle, alerts, and the user menu.
-- **Content:** Cream background, left aligned, max width 1200 px, 32 px padding.
+- **Content:** Cream background, full width with 32 px padding, so its edges line up with the top bar.
 
 ### 6.2 Navigation and modules
 
