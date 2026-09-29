@@ -5,6 +5,7 @@ import { Navigate, useNavigate } from "react-router";
 import * as api from "@/api/endpoints";
 import { useErrorText, useFarms, useKey } from "@/api/hooks";
 import type { Farm } from "@/api/types";
+import { Brand } from "@/components/shell/Brand";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/feedback";
 import { FormError, SelectField, TextField } from "@/components/ui/forms";
@@ -12,7 +13,6 @@ import { useT } from "@/i18n";
 import { COUNTIES } from "@/lib/counties";
 import { useSession } from "@/stores/session";
 import { useUi } from "@/stores/ui";
-import { SplitLayout } from "./SplitLayout";
 
 /** Farm name and location (FRM-01): GPS, or the county as a fallback. */
 export function FarmForm({ onDone, submitLabel }: { onDone: (farm: Farm) => void; submitLabel: string }) {
@@ -110,35 +110,41 @@ export function FarmSetup() {
 
   if (farms.data && farms.data.length > 0 && !done) return <Navigate to="/" replace />;
 
+  // Full page, no photo panel: the logo and the form in one centred column.
   return (
-    <SplitLayout>
-      {done ? (
-        <div className="stack-lg">
-          <CheckCircle2 size={40} className="ink-health" aria-hidden />
-          <div className="stack" style={{ gap: 4 }}>
-            <h1>{t("setup.done")}</h1>
-            <p className="muted">{t("setup.doneHelp")}</p>
+    <main className="setup-page">
+      <div className="setup-brand">
+        <Brand />
+      </div>
+      <div className="setup-body">
+        {done ? (
+          <div className="stack-lg">
+            <CheckCircle2 size={40} className="ink-health setup-center" aria-hidden />
+            <div className="stack setup-heading" style={{ gap: 4 }}>
+              <h1>{t("setup.done")}</h1>
+              <p className="muted">{t("setup.doneHelp")}</p>
+            </div>
+            <Button variant="primary" block onClick={() => navigate("/setup/choose", { replace: true })} autoFocus>
+              {t("common.continue")}
+            </Button>
           </div>
-          <Button variant="primary" block onClick={() => navigate("/setup/choose", { replace: true })} autoFocus>
-            {t("common.continue")}
-          </Button>
-        </div>
-      ) : (
-        <div className="stack-lg">
-          <div className="stack" style={{ gap: 4 }}>
-            <h1>{t("setup.farmTitle")}</h1>
-            <p className="muted">{t("setup.farmHelp")}</p>
+        ) : (
+          <div className="stack-lg">
+            <div className="stack setup-heading" style={{ gap: 4 }}>
+              <h1>{t("setup.farmTitle")}</h1>
+              <p className="muted">{t("setup.farmHelp")}</p>
+            </div>
+            <FarmForm
+              submitLabel={t("common.continue")}
+              onDone={(farm) => {
+                if (orgId) setFarm(orgId, farm.id);
+                qc.invalidateQueries({ queryKey: key("farms") });
+                setDone(true);
+              }}
+            />
           </div>
-          <FarmForm
-            submitLabel={t("common.continue")}
-            onDone={(farm) => {
-              if (orgId) setFarm(orgId, farm.id);
-              qc.invalidateQueries({ queryKey: key("farms") });
-              setDone(true);
-            }}
-          />
-        </div>
-      )}
-    </SplitLayout>
+        )}
+      </div>
+    </main>
   );
 }

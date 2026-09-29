@@ -481,23 +481,47 @@
   min-height: 100vh;
   background: var(--bg);
 }
-.onboard-top {
-  background: var(--gradient-forest);
-  color: var(--surface);
-  padding: var(--s-4) var(--s-6);
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  font-weight: 700;
-}
-.onboard-top img {
-  width: 32px;
-  height: 32px;
+.onboard-brand {
+  justify-content: center;
+  padding-top: var(--s-7);
 }
 .onboard-body {
   max-width: 800px;
   margin: 0 auto;
   padding: var(--s-6) var(--s-5) var(--s-8);
+}
+/* Farm setup (7.7): the logo and the form in one centred column, no photo */
+.setup-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-6);
+  padding: var(--s-7) var(--s-5);
+  background: var(--bg);
+}
+.setup-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-weight: 700;
+  font-size: var(--fs-heading);
+  color: var(--text);
+}
+.setup-brand .brand-mark {
+  width: 48px;
+  height: 48px;
+  box-shadow: none;
+}
+.setup-body {
+  width: min(440px, 100%);
+}
+.setup-heading {
+  text-align: center;
+}
+.setup-center {
+  align-self: center;
 }
 .tile-grid {
   display: grid;

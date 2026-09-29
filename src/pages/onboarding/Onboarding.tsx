@@ -65,15 +65,13 @@ export function Onboarding() {
 
   return (
     <div className="onboard">
-      <div className="onboard-top">
+      <div className="setup-brand onboard-brand">
         <Brand />
-        <span style={{ flex: 1 }} />
-        <span className="small" style={{ fontWeight: 500, opacity: 0.85 }}>{farm?.name}</span>
       </div>
       <main className="onboard-body">
         {step === "choose" ? (
           <div className="stack-lg">
-            <div className="stack" style={{ gap: 4 }}>
+            <div className="stack setup-heading" style={{ gap: 4 }}>
               <h1>{t("choose.title")}</h1>
               <p className="muted">{t("choose.help")}</p>
             </div>
@@ -133,7 +131,7 @@ export function Onboarding() {
               finish.mutate(true);
             }}
           >
-            <div className="stack" style={{ gap: 4 }}>
+            <div className="stack setup-heading" style={{ gap: 4 }}>
               <h1>{t("counts.title")}</h1>
               <p className="muted">{t("counts.help")}</p>
             </div>
