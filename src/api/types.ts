@@ -41,6 +41,7 @@ export interface User {
   phone: string;
   name: string;
   email: string | null;
+  username: string | null;
   preferred_locale: Locale;
   date_joined: string;
 }
@@ -63,10 +64,13 @@ export interface SignInResponse {
   memberships: MembershipSummary[];
 }
 
-export interface OtpRequestResponse {
+export interface RegisterInput {
+  name: string;
+  email: string;
+  username: string;
   phone: string;
-  expires_in: number;
-  debug_code?: string;
+  password: string;
+  locale: Locale;
 }
 
 export interface Organisation {

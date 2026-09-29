@@ -330,13 +330,17 @@ If the organisation uses manual confirmation (payment option C), the M-Pesa choi
 
 ### 7.7 Sign-in and account setup
 
-Split screen: the left panel uses the Deep Forest gradient with the logo and "Manage. Grow. Thrive." in the chosen language; the right panel holds the form.
+Split screen: the left panel uses the Deep Forest gradient with the logo and "Manage. Grow. Thrive." in the chosen language; the right panel holds the form, with an English and Kiswahili switch above it (ONB-01).
 
-1. Choose language (ONB-01)
-2. Phone number and one-time code (ACC-01)
-3. Farm name and location (FRM-01)
+The portal signs in with **email or username and a password**. Phone numbers with one-time SMS codes remain the sign-in method in the Flutter app.
 
-Account setup ends with a short confirmation, "Your farm is set up", and goes straight to choosing what the farmer is dealing with (7.8). The dashboard is not shown until that step is done.
+- **Sign in:** one "Email or username" field and a password field with a show/hide button. A wrong combination gets one message that does not say which part was wrong: "That email, username or password is not right."
+- **Create an account:** full name, email, username (3 to 30 letters, numbers, dots or underscores), phone number (used for M-Pesa and for matching farm invitations) and a password of at least 8 characters. The account is created with its organisation (ACC-02) and goes straight to farm setup.
+- **Forgot password:** asks for the account's email and always answers "If an account uses this email, a reset link is on its way", so it never reveals which emails have accounts.
+
+After sign-up the owner names the farm and sets its location (FRM-01), then chooses what the farm keeps (7.8). The dashboard is not shown until both are done.
+
+API: `POST /auth/login` `{identifier, password, device}`, `POST /auth/register` `{name, email, username, phone, password, locale, device}` (both return the same session payload), and `POST /auth/password/forgot` `{email, locale}` (202).
 
 ### 7.8 Choose what you're dealing with (first run)
 

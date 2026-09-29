@@ -179,11 +179,13 @@ export interface MockDb {
   orgs: MOrg[];
   memberships: MMembership[];
   invitations: MInvitation[];
+  /** Mock passwords by user id, kept apart so they never appear in a user payload. */
+  credentials: Record<string, string>;
   data: Record<string, OrgData>;
 }
 
 const KEY = "shamba-mock-db";
-const VERSION = 5;
+const VERSION = 6;
 
 let db: MockDb | null = null;
 

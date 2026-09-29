@@ -11,7 +11,7 @@ import { CATALOGUE, TYPE_FEED, TYPE_ITEMS, TYPE_OUTPUT, typeInfo } from "./catal
 import * as cmd from "./commands";
 import {
   addDays, balanceOf, balances, daysAgo, daysBetween, emptyOrgData, entriesFor, factorFor, getDb, inRange,
-  isoDate, money, qty, save, sumBy, type MEnterprise, type MFinance, type MockDb, type MPurchase, type MRecord, type MRecorder, type MSale, type OrgData,
+  isoDate, money, qty, save, sumBy, type MEnterprise, type MFinance, type MockDb, type MPurchase, type MRecord, type MRecorder, type MSale, type MUser, type OrgData,
 } from "./db";
 import { seed } from "./seed";
 
@@ -202,36 +202,56 @@ function issue(userId: string, deviceId: string) {
 
 route("GET", "/health", () => ({ status: "ok" }), { auth: false, org: false });
 
-route("POST", "/auth/otp/request", (ctx) => {
-  const phone = normalizePhone(String(ctx.body.phone ?? ""));
-  if (!phone) throw new MockError(400, "validation_error", "Enter a valid phone number.", { phone: ["Enter a valid Kenyan phone number."] });
-  return { phone, expires_in: 600, debug_code: "123456" };
-}, { auth: false, org: false, status: 202 });
+const USERNAME = /^[a-z0-9._]{3,30}$/i;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-route("POST", "/auth/otp/verify", (ctx) => {
-  const phone = normalizePhone(String(ctx.body.phone ?? ""));
-  if (!phone) throw new MockError(400, "validation_error", "Enter a valid phone number.");
-  if (!/^\d{6}$/.test(String(ctx.body.code ?? ""))) throw new MockError(400, "otp.incorrect", "That code is not right. Check the SMS and try again.");
-  const db = ctx.db;
-  let user = db.users.find((u) => u.phone === phone);
-  const isNew = !user;
-  if (!user) {
-    user = { id: crypto.randomUUID(), phone, name: "", email: null, preferred_locale: ctx.body.locale ?? "sw", date_joined: new Date().toISOString() };
-    db.users.push(user);
-    // ACC-02: an organisation is created at sign-up; the farmer never names it.
-    const org = { id: crypto.randomUUID(), name: phone, country: "KE", currency: "KES", default_locale: user.preferred_locale, created_at: user.date_joined, payment_mode: "request" as const };
-    db.orgs.push(org);
-    db.memberships.push({ id: crypto.randomUUID(), user_id: user.id, org_id: org.id, role: "owner", is_active: true, epoch: 1, created_at: user.date_joined, removed_at: null });
-    db.data[org.id] = emptyOrgData();
-  }
+function signedIn(db: MockDb, user: MUser, isNew: boolean) {
   // Pending invitations for this number join on sign-in.
-  for (const inv of db.invitations.filter((i) => i.phone === phone && i.status === "pending")) {
+  for (const inv of db.invitations.filter((i) => i.phone === user.phone && i.status === "pending")) {
     inv.status = "accepted";
     db.memberships.push({ id: crypto.randomUUID(), user_id: user.id, org_id: inv.org_id, role: inv.role, is_active: true, epoch: 1, created_at: new Date().toISOString(), removed_at: null });
   }
   const deviceId = crypto.randomUUID();
   return { ...issue(user.id, deviceId), is_new_user: isNew, device_id: deviceId, user, memberships: membershipsPayload(db, user.id) };
+}
+
+route("POST", "/auth/login", (ctx) => {
+  const id = String(ctx.body.identifier ?? "").trim().toLowerCase();
+  const password = String(ctx.body.password ?? "");
+  const user = ctx.db.users.find((u) => u.email?.toLowerCase() === id || u.username?.toLowerCase() === id);
+  if (!user || ctx.db.credentials[user.id] !== password) throw new MockError(401, "auth.invalid_credentials", "That email, username or password is not right.");
+  return signedIn(ctx.db, user, false);
 }, { auth: false, org: false });
+
+route("POST", "/auth/register", (ctx) => {
+  const db = ctx.db;
+  const b = ctx.body as Record<string, string>;
+  const email = String(b.email ?? "").trim().toLowerCase();
+  const username = String(b.username ?? "").trim().toLowerCase();
+  const phone = normalizePhone(String(b.phone ?? ""));
+  const fields: Record<string, string[]> = {};
+  if (!String(b.name ?? "").trim()) fields.name = ["Enter your name."];
+  if (!EMAIL.test(email)) fields.email = ["Enter a valid email."];
+  else if (db.users.some((u) => u.email?.toLowerCase() === email)) fields.email = ["An account already uses this email. Sign in instead."];
+  if (!USERNAME.test(username)) fields.username = ["Use 3 to 30 letters, numbers, dots or underscores."];
+  else if (db.users.some((u) => u.username?.toLowerCase() === username)) fields.username = ["That username is taken. Try another."];
+  if (!phone) fields.phone = ["Enter a valid Kenyan phone number."];
+  else if (db.users.some((u) => u.phone === phone)) fields.phone = ["An account already uses this number. Sign in instead."];
+  if (String(b.password ?? "").length < 8) fields.password = ["Use at least 8 characters."];
+  if (Object.keys(fields).length) throw new MockError(400, "validation_error", "Check the highlighted fields.", fields);
+  const user: MUser = { id: crypto.randomUUID(), phone: phone!, name: b.name!.trim(), email, username, preferred_locale: (b.locale as T.Locale) ?? "sw", date_joined: new Date().toISOString() };
+  db.users.push(user);
+  db.credentials[user.id] = b.password!;
+  // ACC-02: an organisation is created at sign-up; the farmer never names it.
+  const org = { id: crypto.randomUUID(), name: user.name, country: "KE", currency: "KES", default_locale: user.preferred_locale, created_at: user.date_joined, payment_mode: "request" as const };
+  db.orgs.push(org);
+  db.memberships.push({ id: crypto.randomUUID(), user_id: user.id, org_id: org.id, role: "owner", is_active: true, epoch: 1, created_at: user.date_joined, removed_at: null });
+  db.data[org.id] = emptyOrgData();
+  return signedIn(db, user, true);
+}, { auth: false, org: false, status: 201 });
+
+// Always accepted, so the response never reveals whether an email has an account.
+route("POST", "/auth/password/forgot", () => ({}), { auth: false, org: false, status: 202 });
 
 route("POST", "/auth/token/refresh", (ctx) => {
   const [kind, userId, deviceId] = String(ctx.body.refresh ?? "").split(".");
