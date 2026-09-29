@@ -133,7 +133,6 @@
 .content {
   padding: var(--s-6);
   width: 100%;
-  max-width: calc(var(--content-max) + 2 * var(--s-6));
 }
 .offline-banner {
   display: flex;
