@@ -10,7 +10,7 @@ import { Button } from "./Button";
  */
 
 /** SVG attributes can't resolve var(); read the token's value instead. */
-function token(value: string): string {
+export function token(value: string): string {
   const m = /^var\((--[\w-]+)\)$/.exec(value);
   if (!m) return value;
   return getComputedStyle(document.documentElement).getPropertyValue(m[1]!).trim() || value;

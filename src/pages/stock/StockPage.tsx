@@ -13,7 +13,7 @@ import { useQty, useT } from "@/i18n";
 import { formatNumber, today } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
-import { useInvalidateOrg } from "../../features/enterprise/forms";
+import { useInvalidateOrg } from "../enterprise/forms";
 import { MovementsTable } from "./MovementsTable";
 
 const display = (b: StockBalance) => Number(b.qty_base) / b.display_factor;
