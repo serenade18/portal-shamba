@@ -1,25 +1,30 @@
 # Shamba OS — web portal
 
-The owner and manager web dashboard for Shamba OS. Requirements: [mvp.md](mvp.md). Design: [build.md](build.md). API: the Django backend in `ShambaOS-m`.
+The owner and manager web dashboard for Shamba OS. Requirements: [mvp.md](mvp.md). Design: [build.md](build.md). API: [shambaos-backend](https://github.com/serenade18/shambaos-backend) (Django).
 
 Vite, React 19, TypeScript, React Router, React Query (server state), zustand (session and UI state), Recharts.
 
 ## Run it
 
 ```bash
-npm install
-npm run dev          # http://localhost:3000
+npm install --legacy-peer-deps
+npm run dev          # http://localhost:3000, against shambaos-backend on :8000
+npm run dev:demo     # no backend: the whole API is mocked in the browser
 ```
 
-With the default `.env.development` (`VITE_MOCK=all`) the portal runs with no backend, on seeded demo data:
+`npm run dev` expects [shambaos-backend](https://github.com/serenade18/shambaos-backend) running on `localhost:8000` (see its README; Vite proxies `/api` to it). Create an account on the sign-in page, or sign in with one you made. Password reset emails print in the backend's console in development.
 
-| Phone | Signs in as |
+The portal signs in with **email or username and password** (`/auth/login`, `/auth/register`, `/auth/password/forgot`, and `/auth/password/reset` from the emailed `/reset-password?uid=…&token=…` link). The Flutter app keeps phone codes.
+
+`npm run dev:demo` runs on seeded demo data instead:
+
+| Username (or email) | Signs in as |
 | --- | --- |
-| 0712 345 678 | John Kamau, owner of Kamau farm, and manager of a second farm account |
-| 0722 000 111 | Otieno, field worker (no money anywhere) |
-| any other number | a new user: goes through farm setup and "What's on your farm?" |
+| `jkamau` (john@kamaufarm.co.ke) | John Kamau, owner of Kamau farm, and manager of a second farm account |
+| `otieno` | Otieno, field worker (no money anywhere) |
+| Create an account | a new user: goes through farm setup and "What's on your farm?" |
 
-Any 6 digits work as the code. Demo data lives in the browser's localStorage; clear site data to reset it.
+The password for the demo accounts is `shamba123`. In demo mode a reset link is printed to the browser console. Demo data lives in the browser's localStorage; clear site data to reset it.
 
 ## Against the real backend
 
@@ -28,10 +33,10 @@ The backend today serves identity, tenancy (members, invitations) and payment re
 | `VITE_MOCK` | What happens |
 | --- | --- |
 | `all` | Every route is mocked. No backend needed. |
-| `missing` | Routes Django has go to Django (`/api` is proxied to `localhost:8000`); the rest are mocked. OTP sign-in, members and invitations are real. An M-Pesa sale creates a real SasaPay payment request. |
+| `missing` | The default for `npm run dev`. Routes Django has go to Django (`/api` is proxied to `localhost:8000`); the rest are mocked. Sign-in, sign-up, password reset, members and invitations are real. An M-Pesa sale creates a real SasaPay payment request. |
 | `none` | No mock. Use once the backend serves every route. |
 
-Set it in `.env.local`. `VITE_API_TARGET` changes the proxy target.
+Override it in `.env.local`. `VITE_API_TARGET` changes the proxy target. Requests carry `Accept-Language`, so Django's messages (field errors included) follow the portal's language.
 
 When the backend ships a route, add it to `IMPLEMENTED` in [src/api/client.ts](src/api/client.ts) and delete its handler from [src/api/mock/server.ts](src/api/mock/server.ts). Nothing else changes: the portal already calls the paths and shapes in the architecture doc. Once the schema covers them, `npm run gen:api` generates types from `/api/v1/schema` to replace the hand-written ones in [src/api/types.ts](src/api/types.ts).
 

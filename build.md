@@ -139,6 +139,14 @@ The palette's three gradients are used only here:
 
 ---
 
+### 3.5 Logo
+
+The logo is a white leaf outline in a Forest Green circle, beside the wordmark "Shamba **OS**" with "Intelligent Farming" beneath. The original artwork is in `public/brand/` (`shamba-os-logo.png`, `shamba-os-icon.png`); `public/logo.svg` redraws the mark as a vector for the favicon and every in-app use, with PNG sizes in `public/brand/icon-*.png`.
+
+- In the portal the logo always sits on dark greens (sidebar, sign-in panel, onboarding header): the wordmark is white with "OS" in `--brand-os` (`#87C059`, the logo's own green, used nowhere else), and the mark gets a faint white ring so its circle stays distinct from the background.
+- The tagline appears only on the sign-in panel, translated ("Kilimo Mahiri").
+- When the sidebar collapses to icons, only the mark shows.
+
 ## 4. Typography
 
 **Typeface: Figtree** (open licence, Google Fonts), one family for the whole portal. It is friendly and round without being childish, reads well at small sizes, and has clear figures. Fallback stack: `Figtree, "Segoe UI", Roboto, system-ui, sans-serif`.
@@ -340,7 +348,7 @@ The portal signs in with **email or username and a password**. Phone numbers wit
 
 After sign-up the owner names the farm and sets its location (FRM-01), then chooses what the farm keeps (7.8). The dashboard is not shown until both are done.
 
-API: `POST /auth/login` `{identifier, password, device}`, `POST /auth/register` `{name, email, username, phone, password, locale, device}` (both return the same session payload), and `POST /auth/password/forgot` `{email, locale}` (202).
+API: `POST /auth/login` `{identifier, password, device}`, `POST /auth/register` `{name, email, username, phone, password, locale, device}` (both return the same session payload), `POST /auth/password/forgot` `{email, locale}` (202), and `POST /auth/password/reset` `{uid, token, password}` (204) from the emailed link, which opens `/reset-password?uid=…&token=…`. A reset signs the account out on every device.
 
 ### 7.8 Choose what you're dealing with (first run)
 

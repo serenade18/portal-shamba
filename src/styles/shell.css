@@ -27,8 +27,33 @@
   text-decoration: none;
 }
 .sidebar .brand img {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
+}
+
+/* Logo lockup (Brand): leaf mark, wordmark, optional tagline */
+.brand-mark {
+  flex: none;
+  border-radius: 50%;
+  /* The mark's Forest Green circle sits on darker greens; a faint ring keeps its edge. */
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2);
+}
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.wordmark b {
+  color: var(--brand-os);
+  font-weight: inherit;
+}
+.wordmark small {
+  font-size: var(--fs-small);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+  margin-top: 2px;
 }
 .nav-link {
   position: relative;
@@ -329,8 +354,8 @@
   font-weight: 700;
 }
 .split-brand .logo img {
-  width: 44px;
-  height: 44px;
+  width: 56px;
+  height: 56px;
 }
 .split-brand .line {
   font-size: 40px;

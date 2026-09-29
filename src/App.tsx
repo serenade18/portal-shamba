@@ -5,6 +5,7 @@ import { AppShell } from "./components/shell/AppShell";
 import { Toaster } from "./components/ui/feedback";
 import { Skeleton } from "./components/ui/feedback";
 import { AlertsPage } from "./pages/alerts/AlertsPage";
+import { ResetPassword } from "./pages/auth/ResetPassword";
 import { SignIn } from "./pages/auth/SignIn";
 import { FarmSetup } from "./pages/auth/FarmSetup";
 import { Dashboard } from "./pages/dashboard/Dashboard";
@@ -55,6 +56,7 @@ function RequireSetup() {
 
 const router = createBrowserRouter([
   { path: "/sign-in", element: <SignIn /> },
+  { path: "/reset-password", element: <ResetPassword /> },
   {
     element: <RequireAuth />,
     children: [
