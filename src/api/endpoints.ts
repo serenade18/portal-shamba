@@ -13,6 +13,8 @@ export const auth = {
     http.post<T.SignInResponse>("/auth/register", { ...body, device: device(installId) }, { auth: false, org: false }),
   forgotPassword: (email: string, locale: T.Locale) =>
     http.post<void>("/auth/password/forgot", { email, locale }, { auth: false, org: false }),
+  resetPassword: (uid: string, token: string, password: string) =>
+    http.post<void>("/auth/password/reset", { uid, token, password }, { auth: false, org: false }),
   logout: (refresh: string | null) => http.post<void>("/auth/logout", { refresh: refresh ?? "" }, { org: false }),
 };
 

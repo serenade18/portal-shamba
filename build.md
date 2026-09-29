@@ -340,7 +340,7 @@ The portal signs in with **email or username and a password**. Phone numbers wit
 
 After sign-up the owner names the farm and sets its location (FRM-01), then chooses what the farm keeps (7.8). The dashboard is not shown until both are done.
 
-API: `POST /auth/login` `{identifier, password, device}`, `POST /auth/register` `{name, email, username, phone, password, locale, device}` (both return the same session payload), and `POST /auth/password/forgot` `{email, locale}` (202).
+API: `POST /auth/login` `{identifier, password, device}`, `POST /auth/register` `{name, email, username, phone, password, locale, device}` (both return the same session payload), `POST /auth/password/forgot` `{email, locale}` (202), and `POST /auth/password/reset` `{uid, token, password}` (204) from the emailed link, which opens `/reset-password?uid=…&token=…`. A reset signs the account out on every device.
 
 ### 7.8 Choose what you're dealing with (first run)
 

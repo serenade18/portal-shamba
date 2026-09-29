@@ -251,7 +251,28 @@ route("POST", "/auth/register", (ctx) => {
 }, { auth: false, org: false, status: 201 });
 
 // Always accepted, so the response never reveals whether an email has an account.
-route("POST", "/auth/password/forgot", () => ({}), { auth: false, org: false, status: 202 });
+// The mock has no email: the link goes to the browser console instead.
+route("POST", "/auth/password/forgot", (ctx) => {
+  const email = String(ctx.body.email ?? "").trim().toLowerCase();
+  const user = ctx.db.users.find((u) => u.email?.toLowerCase() === email);
+  if (user) console.info(`[mock] password reset link: ${location.origin}/reset-password?uid=${btoa(user.id)}&token=mock`);
+  return null;
+}, { auth: false, org: false, status: 202 });
+
+route("POST", "/auth/password/reset", (ctx) => {
+  let userId = "";
+  try {
+    userId = atob(String(ctx.body.uid ?? ""));
+  } catch {
+    /* not base64: invalid link */
+  }
+  if (ctx.body.token !== "mock" || !ctx.db.users.some((u) => u.id === userId)) {
+    throw new MockError(400, "auth.reset_link_invalid", "This reset link has expired or was already used. Ask for a new one.");
+  }
+  if (String(ctx.body.password ?? "").length < 8) throw new MockError(400, "validation_error", "Check the highlighted fields.", { password: ["Use at least 8 characters."] });
+  ctx.db.credentials[userId] = String(ctx.body.password);
+  return null;
+}, { auth: false, org: false, status: 204 });
 
 route("POST", "/auth/token/refresh", (ctx) => {
   const [kind, userId, deviceId] = String(ctx.body.refresh ?? "").split(".");
