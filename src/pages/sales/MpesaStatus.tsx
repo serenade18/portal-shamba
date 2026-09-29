@@ -7,7 +7,7 @@ import { Chip } from "@/components/ui/feedback";
 import { FormError, TextField } from "@/components/ui/forms";
 import { useT } from "@/i18n";
 import { formatPhone } from "@/lib/phone";
-import { useInvalidateOrg } from "../../features/enterprise/forms";
+import { useInvalidateOrg } from "../enterprise/forms";
 
 type Shown = "sending" | "waiting" | "otp" | "paid" | "failed" | "expired";
 
