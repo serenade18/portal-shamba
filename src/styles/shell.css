@@ -1268,3 +1268,74 @@
   flex: 1;
   margin: 0;
 }
+
+/* Staff dashboard: farm accounts on a map of Africa */
+.africa-map {
+  position: relative;
+}
+.africa-map.loading {
+  aspect-ratio: 1 / 1.05;
+  border-radius: var(--radius-control);
+  background: var(--bg);
+}
+.africa-map svg {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+}
+.africa-map path,
+.africa-map circle {
+  stroke: var(--surface);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+.africa-map circle {
+  stroke-width: 2;
+}
+.africa-map [tabindex] {
+  cursor: pointer;
+  outline: none;
+}
+.africa-map .on,
+.africa-map [tabindex]:focus-visible {
+  stroke: var(--text);
+  stroke-width: 1.6;
+}
+.africa-map .on {
+  /* Draw the hovered country's outline above its neighbours. */
+  paint-order: stroke;
+}
+.map-tip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, calc(-100% - 8px));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-overlay);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin-top: var(--s-3);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+.map-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-legend i {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}

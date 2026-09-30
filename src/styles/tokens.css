@@ -23,6 +23,7 @@
   --sky: #5c91a6;
   --health: #4d9561;
   --lavender: #8a7cc7;
+  --map-empty: #e8e6dc; /* land with no data on maps: a Stone tint, clearly not the green scale */
 
   /* Ink variants: text uses these (W1: confirm with a contrast checker) */
   --amber-ink: #8a5a10;

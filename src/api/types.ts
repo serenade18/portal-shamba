@@ -623,6 +623,8 @@ export interface StaffAnalytics {
   languages: { locale: Locale; farmers: number }[];
   roles: { role: Role; members: number }[];
   payment_statuses: { status: "pending" | "awaiting_otp" | "succeeded" | "failed" | "expired"; count: number }[];
+  /** Farm accounts per country (ISO alpha-2), most first. */
+  countries: { country: string; organisations: number; farmers: number }[];
   recent_signups: StaffFarmer[];
   top_organisations: { id: string; name: string; created_at: string; members: number; owner: string | null; collected: string }[];
 }

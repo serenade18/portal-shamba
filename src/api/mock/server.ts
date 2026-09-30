@@ -1585,6 +1585,15 @@ route("GET", "/staff/analytics", (ctx) => {
       { status: "expired", count: Math.round(requests * 0.03) },
       { status: "pending", count: requests - succeeded - Math.round(requests * 0.07) - Math.round(requests * 0.03) },
     ],
+    countries: [
+      { country: "KE", organisations: 612 + sum(daily, "organisations"), farmers: 1043 },
+      { country: "UG", organisations: 148, farmers: 231 },
+      { country: "TZ", organisations: 97, farmers: 150 },
+      { country: "RW", organisations: 54, farmers: 88 },
+      { country: "NG", organisations: 31, farmers: 42 },
+      { country: "GH", organisations: 12, farmers: 17 },
+      { country: "MU", organisations: 3, farmers: 4 },
+    ],
     recent_signups: users.slice(0, 10).map((u, i) => farmerRow(ctx, u, i)),
     top_organisations: [
       ...ctx.db.orgs.map((o) => ({
