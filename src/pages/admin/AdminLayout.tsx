@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, LogOut, Menu, ShieldCheck, type LucideIcon } from "lucide-react";
+import { BarChart3, LogOut, Menu, ShieldCheck, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import * as api from "@/api/endpoints";
@@ -22,6 +22,7 @@ export function RequireAdmin() {
 /** Staff pages, in sidebar order. Add a page here and it appears in the sidebar. */
 const NAV: { to: string; label: MsgKey; icon: LucideIcon }[] = [
   { to: "/admin", label: "admin.analytics", icon: BarChart3 },
+  { to: "/admin/farmers", label: "admin.farmers", icon: Users },
 ];
 
 /** The staff area: the farmer app's sidebar layout in Charcoal, so it never looks like a farm account. */

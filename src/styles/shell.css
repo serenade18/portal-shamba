@@ -1251,3 +1251,20 @@
     padding: var(--s-4);
   }
 }
+
+/* Staff farmers list: search field in the panel head */
+.admin-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: min(420px, 100%);
+  font-weight: 400;
+}
+.admin-search > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+.admin-search .field {
+  flex: 1;
+  margin: 0;
+}

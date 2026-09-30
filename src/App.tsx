@@ -9,6 +9,7 @@ import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminLayout, RequireAdmin } from "./pages/admin/AdminLayout";
 import { AdminSignIn } from "./pages/admin/AdminSignIn";
 import { AdminSignUp } from "./pages/admin/AdminSignUp";
+import { AdminFarmers } from "./pages/admin/AdminFarmers";
 import { ResetPassword } from "./pages/auth/ResetPassword";
 import { SignIn } from "./pages/auth/SignIn";
 import { FarmSetup } from "./pages/auth/FarmSetup";
@@ -68,7 +69,7 @@ const router = createBrowserRouter([
   {
     path: "/admin",
     element: <RequireAdmin />,
-    children: [{ element: <AdminLayout />, children: [{ index: true, element: <AdminDashboard /> }] }],
+    children: [{ element: <AdminLayout />, children: [{ index: true, element: <AdminDashboard /> }, { path: "farmers", element: <AdminFarmers /> }] }],
   },
   {
     element: <RequireAuth />,

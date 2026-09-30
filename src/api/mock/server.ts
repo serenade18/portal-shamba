@@ -1496,6 +1496,26 @@ route("GET", "/dashboard", (ctx) => {
 
 
 /* ---------- Staff analytics (demo numbers) ---------- */
+function farmerRow(ctx: Ctx, u: MUser, i: number): T.StaffFarmer {
+  const m = ctx.db.memberships.find((x) => x.user_id === u.id && x.is_active);
+  const joined = new Date(Date.now() - (i * 7 + 2) * 3_600_000);
+  return {
+    id: u.id, name: u.name, phone: u.phone, email: u.email, username: u.username, date_joined: joined.toISOString(),
+    organisation: m ? ctx.db.orgs.find((o) => o.id === m.org_id)?.name ?? null : null, role: m?.role ?? null,
+    platform: i % 3 === 1 ? "web" : "android", last_seen_at: new Date(joined.getTime() + 3_600_000).toISOString(), is_active: true,
+  };
+}
+
+route("GET", "/staff/farmers", (ctx) => {
+  if (!ctx.db.staff.includes(ctx.userId ?? "")) throw new MockError(403, "permission_denied", "You do not have permission to do this.");
+  const q = (ctx.q.get("q") ?? "").trim().toLowerCase();
+  const digits = q.replace(/\D/g, "").replace(/^0+/, "");
+  const rows = ctx.db.users
+    .filter((u) => !ctx.db.staff.includes(u.id))
+    .map((u, i) => farmerRow(ctx, u, i))
+    .filter((r) => !q || [r.name, r.email, r.username].some((v) => v?.toLowerCase().includes(q)) || (!!digits && r.phone.includes(digits)));
+  return paginate(rows, ctx.q, 50);
+}, { org: false });
 
 /** Repeatable pseudo-random numbers, so the demo shows the same platform each load. */
 function seeded(seed: number) {
@@ -1565,15 +1585,7 @@ route("GET", "/staff/analytics", (ctx) => {
       { status: "expired", count: Math.round(requests * 0.03) },
       { status: "pending", count: requests - succeeded - Math.round(requests * 0.07) - Math.round(requests * 0.03) },
     ],
-    recent_signups: users.slice(0, 10).map((u, i) => {
-      const m = ctx.db.memberships.find((x) => x.user_id === u.id && x.is_active);
-      const joined = new Date(today.getTime() - (i * 7 + 2) * 3_600_000);
-      return {
-        id: u.id, name: u.name, phone: u.phone, email: u.email, username: u.username, date_joined: joined.toISOString(),
-        organisation: m ? ctx.db.orgs.find((o) => o.id === m.org_id)?.name ?? null : null, role: m?.role ?? null,
-        platform: i % 3 === 1 ? "web" : "android", last_seen_at: new Date(joined.getTime() + 3_600_000).toISOString(),
-      };
-    }),
+    recent_signups: users.slice(0, 10).map((u, i) => farmerRow(ctx, u, i)),
     top_organisations: [
       ...ctx.db.orgs.map((o) => ({
         id: o.id, name: o.name, created_at: o.created_at,

@@ -589,6 +589,21 @@ export interface Dashboard {
 
 export type AnalyticsDays = 7 | 30 | 90;
 
+/** A farmer as staff see them: their first farm account and latest device. */
+export interface StaffFarmer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  username: string | null;
+  date_joined: string;
+  organisation: string | null;
+  role: Role | null;
+  platform: "android" | "ios" | "web" | null;
+  last_seen_at: string | null;
+  is_active: boolean;
+}
+
 export interface StaffAnalytics {
   days: AnalyticsDays;
   from: string;
@@ -608,17 +623,6 @@ export interface StaffAnalytics {
   languages: { locale: Locale; farmers: number }[];
   roles: { role: Role; members: number }[];
   payment_statuses: { status: "pending" | "awaiting_otp" | "succeeded" | "failed" | "expired"; count: number }[];
-  recent_signups: {
-    id: string;
-    name: string;
-    phone: string;
-    email: string | null;
-    username: string | null;
-    date_joined: string;
-    organisation: string | null;
-    role: Role | null;
-    platform: "android" | "ios" | "web" | null;
-    last_seen_at: string | null;
-  }[];
+  recent_signups: StaffFarmer[];
   top_organisations: { id: string; name: string; created_at: string; members: number; owner: string | null; collected: string }[];
 }
