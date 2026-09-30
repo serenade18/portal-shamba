@@ -67,6 +67,7 @@ export async function handle(req: RawRequest): Promise<Result> {
     const ctx: Ctx = { req, params, q: req.query, body: req.body ?? {}, db, userId: null, deviceId: null, orgId: null, role: null };
     if (match.auth) authenticate(ctx);
     if (match.org) resolveOrg(ctx);
+    if (match.org) await syncRealFarms(ctx);
     const body = await match.handler(ctx);
     save();
     return { status: body === undefined ? 204 : match.status, body: body ?? null };
@@ -464,6 +465,22 @@ function settleSales(ctx: Ctx) {
       (sale as MSale & { settled?: string }).settled = p.id;
     }
   }
+}
+
+/**
+ * With VITE_MOCK=missing, farms live in Django but onboarding, plots and the
+ * rest are still mocked. Copy the real farms in before a mocked route looks
+ * one up. Onboarding progress (setup_complete) is mock-only, so it's kept.
+ */
+const farmsSyncedAt: Record<string, number> = {};
+async function syncRealFarms(ctx: Ctx) {
+  if (MOCK_MODE !== "missing" || !ctx.orgId || Date.now() - (farmsSyncedAt[ctx.orgId] ?? 0) < 3000) return;
+  const res = await sendNetwork({ method: "GET", path: "/farms", query: new URLSearchParams({ limit: "200" }), body: undefined, headers: ctx.req.headers });
+  if (res.status !== 200) return;
+  const d = data(ctx);
+  const done = new Set(d.farms.filter((f) => f.setup_complete).map((f) => f.id));
+  d.farms = (res.body as T.Page<T.Farm>).results.map((f) => ({ ...f, setup_complete: f.setup_complete || done.has(f.id) }));
+  farmsSyncedAt[ctx.orgId] = Date.now();
 }
 
 /** With VITE_MOCK=missing, payment requests go to the real Django + SasaPay; keep a copy for the mock sale. */
@@ -1496,6 +1513,45 @@ route("GET", "/dashboard", (ctx) => {
 
 
 /* ---------- Staff analytics (demo numbers) ---------- */
+const DEMO_COUNTRIES = [
+  { country: "KE", organisations: 612, farmers: 1043 },
+  { country: "UG", organisations: 148, farmers: 231 },
+  { country: "TZ", organisations: 97, farmers: 150 },
+  { country: "RW", organisations: 54, farmers: 88 },
+  { country: "NG", organisations: 31, farmers: 42 },
+  { country: "GH", organisations: 12, farmers: 17 },
+  { country: "MU", organisations: 3, farmers: 4 },
+];
+/** Demo farms for the staff map, placed near real farming towns. */
+const DEMO_TOWNS: Record<string, [string, string, number, number][]> = {
+  KE: [["Chebet dairy", "Uasin Gishu", 0.514, 35.27], ["Nakuru vegetables", "Nakuru", -0.303, 36.08], ["Otieno fish ponds", "Kisumu", -0.091, 34.77], ["Narok wheat", "Narok", -1.08, 35.87], ["Kitale maize", "Trans Nzoia", 1.015, 35.0], ["Meru bananas", "Meru", 0.047, 37.65], ["Machakos goats", "Machakos", -1.517, 37.26]],
+  UG: [["Nakato coffee", "Wakiso", 0.404, 32.46], ["Mbarara dairy", "Mbarara", -0.607, 30.65], ["Gulu sesame", "Gulu", 2.78, 32.3]],
+  TZ: [["Arusha vegetables", "Arusha", -3.387, 36.68], ["Morogoro rice", "Morogoro", -6.827, 37.66], ["Mbeya potatoes", "Mbeya", -8.9, 33.46]],
+  RW: [["Musanze potatoes", "Musanze", -1.5, 29.63], ["Huye coffee", "Huye", -2.6, 29.74]],
+  NG: [["Kaduna maize", "Kaduna", 10.52, 7.44], ["Oyo cassava", "Oyo", 7.85, 3.93]],
+  GH: [["Kumasi cocoa", "Ashanti", 6.69, -1.62], ["Techiman yams", "Bono East", 7.58, -1.94]],
+  MU: [["Moka sugar", "Moka", -20.23, 57.5]],
+};
+
+function realDemoFarms(ctx: Ctx): T.StaffMapFarm[] {
+  return ctx.db.orgs.flatMap((o) => {
+    const ownerM = ctx.db.memberships.find((m) => m.org_id === o.id && m.role === "owner" && m.is_active);
+    const owner = ctx.db.users.find((u) => u.id === ownerM?.user_id);
+    return (ctx.db.data[o.id]?.farms ?? []).map((f) => ({
+      ...f, organisation: { id: o.id, name: o.name }, owner: owner ? { name: owner.name, phone: owner.phone } : null,
+    }));
+  });
+}
+
+route("GET", "/staff/farms", (ctx) => {
+  if (!ctx.db.staff.includes(ctx.userId ?? "")) throw new MockError(403, "permission_denied", "You do not have permission to do this.");
+  const country = (ctx.q.get("country") ?? "").toUpperCase();
+  const demo: T.StaffMapFarm[] = (DEMO_TOWNS[country] ?? []).map(([name, county, lat, lng], i) => ({
+    id: `demo-${country}-${i}`, name, county, location: { lat, lng }, setup_complete: true, created_at: "2026-06-01T08:00:00Z",
+    organisation: { id: `demo-org-${country}-${i}`, name }, owner: { name: name.split(" ")[0]!, phone: "+254700000000" },
+  }));
+  return { country, farms: [...(country === "KE" ? realDemoFarms(ctx) : []), ...demo], truncated: false } satisfies T.StaffMapFarms;
+}, { org: false });
 function farmerRow(ctx: Ctx, u: MUser, i: number): T.StaffFarmer {
   const m = ctx.db.memberships.find((x) => x.user_id === u.id && x.is_active);
   const joined = new Date(Date.now() - (i * 7 + 2) * 3_600_000);
@@ -1585,15 +1641,12 @@ route("GET", "/staff/analytics", (ctx) => {
       { status: "expired", count: Math.round(requests * 0.03) },
       { status: "pending", count: requests - succeeded - Math.round(requests * 0.07) - Math.round(requests * 0.03) },
     ],
-    countries: [
-      { country: "KE", organisations: 612 + sum(daily, "organisations"), farmers: 1043 },
-      { country: "UG", organisations: 148, farmers: 231 },
-      { country: "TZ", organisations: 97, farmers: 150 },
-      { country: "RW", organisations: 54, farmers: 88 },
-      { country: "NG", organisations: 31, farmers: 42 },
-      { country: "GH", organisations: 12, farmers: 17 },
-      { country: "MU", organisations: 3, farmers: 4 },
-    ],
+    countries: DEMO_COUNTRIES.map((c) => ({
+      country: c.country,
+      organisations: c.organisations + (c.country === "KE" ? sum(daily, "organisations") : 0),
+      farmers: c.farmers,
+      farms: DEMO_TOWNS[c.country]!.length + (c.country === "KE" ? realDemoFarms(ctx).length : 0),
+    })),
     recent_signups: users.slice(0, 10).map((u, i) => farmerRow(ctx, u, i)),
     top_organisations: [
       ...ctx.db.orgs.map((o) => ({

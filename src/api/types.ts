@@ -604,6 +604,25 @@ export interface StaffFarmer {
   is_active: boolean;
 }
 
+/** One farm on the staff map (GET /staff/farms?country=). */
+export interface StaffMapFarm {
+  id: string;
+  name: string;
+  county: string;
+  location: { lat: number; lng: number } | null;
+  setup_complete: boolean;
+  created_at: string;
+  organisation: { id: string; name: string };
+  owner: { name: string; phone: string } | null;
+}
+
+export interface StaffMapFarms {
+  country: string;
+  farms: StaffMapFarm[];
+  /** More farms exist than the map was sent. */
+  truncated: boolean;
+}
+
 export interface StaffAnalytics {
   days: AnalyticsDays;
   from: string;
@@ -624,7 +643,7 @@ export interface StaffAnalytics {
   roles: { role: Role; members: number }[];
   payment_statuses: { status: "pending" | "awaiting_otp" | "succeeded" | "failed" | "expired"; count: number }[];
   /** Farm accounts per country (ISO alpha-2), most first. */
-  countries: { country: string; organisations: number; farmers: number }[];
+  countries: { country: string; organisations: number; farmers: number; farms: number }[];
   recent_signups: StaffFarmer[];
   top_organisations: { id: string; name: string; created_at: string; members: number; owner: string | null; collected: string }[];
 }

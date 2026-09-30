@@ -1269,57 +1269,139 @@
   margin: 0;
 }
 
-/* Staff dashboard: farm accounts on a map of Africa */
-.africa-map {
-  position: relative;
+/* Staff dashboard: the farm map (Leaflet) with a side panel */
+.farm-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--s-5);
 }
-.africa-map.loading {
-  aspect-ratio: 1 / 1.05;
+.farm-map-canvas {
+  position: relative;
+  /* Leaflet's panes use z-indexes up to 1000; keep them below the app's drawer and menus. */
+  isolation: isolate;
+  z-index: 0;
+}
+.farm-map-leaflet,
+.farm-map-loading {
+  height: 520px;
   border-radius: var(--radius-control);
+  background: var(--surface);
+}
+.farm-map .farm-map-leaflet {
+  /* Beats Leaflet's own grey, which loads after this sheet. */
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font: inherit;
+}
+.farm-map-loading {
+  position: absolute;
+  inset: 0;
   background: var(--bg);
 }
-.africa-map svg {
-  display: block;
-  width: 100%;
-  max-height: 520px;
-}
-.africa-map path,
-.africa-map circle {
-  stroke: var(--surface);
-  stroke-width: 0.8;
-  stroke-linejoin: round;
-}
-.africa-map circle {
-  stroke-width: 2;
-}
-.africa-map [tabindex] {
-  cursor: pointer;
-  outline: none;
-}
-.africa-map .on,
-.africa-map [tabindex]:focus-visible {
-  stroke: var(--text);
-  stroke-width: 1.6;
-}
-.africa-map .on {
-  /* Draw the hovered country's outline above its neighbours. */
-  paint-order: stroke;
-}
-.map-tip {
+.farm-map-canvas .map-legend {
   position: absolute;
-  z-index: 5;
-  transform: translate(-50%, calc(-100% - 8px));
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  left: var(--s-3);
+  bottom: var(--s-3);
+  z-index: 500;
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius-control);
+  background: rgb(255 255 255 / 0.92);
+}
+.leaflet-tooltip.leaflet-tip {
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface);
   box-shadow: var(--shadow-overlay);
-  font-size: 13px;
-  white-space: nowrap;
-  pointer-events: none;
+  font: 13px/1.4 var(--font);
+  color: var(--text);
+}
+/* Over satellite imagery the country labels only get in the way of the farms. */
+.farm-map-canvas.detail .country-tip {
+  display: none;
+}
+.farm-map-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.farm-map-kicker,
+.farm-map-title {
+  margin: 0;
+  font-size: var(--fs-heading);
+  font-weight: 700;
+}
+.farm-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--s-2);
+}
+.farm-map-list button {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.farm-map-list button:hover:not(:disabled) {
+  background: var(--bg);
+}
+.farm-map-list button:disabled {
+  cursor: default;
+  color: var(--text-muted);
+}
+.farm-map-list .grow {
+  flex: 1;
+  min-width: 0;
+}
+.farm-map-name {
+  display: flex;
+  flex-direction: column;
+}
+.map-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.farm-map-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-2) var(--s-4);
+  margin: var(--s-3) 0;
+  font-size: var(--fs-small);
+}
+.farm-map-facts dt {
+  color: var(--text-secondary);
+}
+.farm-map-facts dd {
+  margin: 0;
+}
+@media (max-width: 1023px) {
+  .farm-map {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .farm-map-side {
+    max-height: none;
+  }
+}
+@media (max-width: 767px) {
+  .farm-map-leaflet,
+  .farm-map-loading {
+    height: 380px;
+  }
 }
 .map-legend {
   display: flex;

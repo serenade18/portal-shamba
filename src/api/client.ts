@@ -18,6 +18,7 @@ const IMPLEMENTED = [
   /^\/members(\/[^/]+)?$/,
   /^\/invitations(\/[^/]+)?$/,
   /^\/payments\/requests(\/[^/]+)?(\/otp)?$/,
+  /^\/farms(\/[0-9a-f-]{36})?$/, // farms list, create and update; onboarding (/farms/{id}/types) is still mocked
   /^\/staff\//, // staff analytics (the admin area)
 ];
 

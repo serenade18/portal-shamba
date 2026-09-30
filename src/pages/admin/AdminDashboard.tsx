@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownRight, ArrowUpRight, CheckCircle2, Clock, Hourglass, MailPlus, RefreshCw, Sprout, Users, Wallet, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { ApiError, MOCK_MODE } from "@/api/client";
 import * as api from "@/api/endpoints";
 import type { AnalyticsDays, StaffAnalytics } from "@/api/types";
@@ -15,7 +15,10 @@ import { formatDate, formatMoney, formatTime, percentChange } from "@/lib/format
 import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
 import { BarList, ColumnChart, LineChart, StatusBar } from "./AdminCharts";
-import { AFRICA, AfricaMap, useCountryName } from "./AfricaMap";
+import { AFRICA, useCount, useCountryName } from "./geo";
+
+// Leaflet and the map shapes load only when the dashboard shows the map.
+const AfricaMap = lazy(() => import("./AfricaMap"));
 
 const compact = (v: number) => Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(v);
 const whole = (v: number) => v.toLocaleString("en");
@@ -69,6 +72,7 @@ function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }
   const signupChange = percentChange(tot.farmers.new, tot.farmers.previous_new);
   const signedUp = data.funnel[0]?.count ?? 0;
   const countryName = useCountryName();
+  const count = useCount();
   const accounts = data.countries.reduce((a, c) => a + c.organisations, 0);
   const outside = data.countries.filter((c) => !AFRICA.has(c.country));
   const statusMeta = {
@@ -138,38 +142,23 @@ function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }
         </Panel>
       </div>
 
-      <div className="span-8">
+      <div className="span-12">
         <Panel title={t("admin.map.title")}>
           <ChartFrame
             summary={data.countries.length
-              ? t("admin.map.summary", { accounts: whole(accounts), countries: data.countries.length, top: countryName(data.countries[0]!.country) })
+              ? t("admin.map.summary", { accounts: count("accounts", accounts), countries: count("countries", data.countries.length), top: countryName(data.countries[0]!.country) })
               : t("admin.map.empty")}
             table={<DataTable head={[t("admin.col.country"), t("admin.kpi.accounts")]} rows={data.countries.map((c) => [countryName(c.country), whole(c.organisations)])} />}
           >
-            <AfricaMap rows={data.countries} />
+            <Suspense fallback={<Skeleton height={480} />}>
+              <AfricaMap rows={data.countries} />
+            </Suspense>
             {outside.length > 0 && (
               <p className="small muted" style={{ marginTop: 8 }}>
                 {t("admin.map.outside", { list: outside.map((c) => `${countryName(c.country)} (${whole(c.organisations)})`).join(", ") })}
               </p>
             )}
           </ChartFrame>
-        </Panel>
-      </div>
-      <div className="span-4">
-        <Panel title={t("admin.map.top")}>
-          {data.countries.length ? (
-            <BarList
-              color="var(--green-600)"
-              rows={data.countries.slice(0, 8).map((c) => ({
-                key: c.country,
-                label: countryName(c.country),
-                value: c.organisations,
-                detail: accounts ? `${Math.round((c.organisations / accounts) * 100)}%` : undefined,
-              }))}
-            />
-          ) : (
-            <p className="small muted">{t("admin.map.empty")}</p>
-          )}
         </Panel>
       </div>
 

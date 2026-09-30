@@ -168,5 +168,6 @@ export const staff = {
     http.post<T.SignInResponse>("/auth/staff/register", { ...body, device: device(installId) }, { auth: false, org: false, headers: { "X-Signup-Key": signupKey } }),
   logout: (refresh: string | null) => http.post<void>("/auth/logout", { refresh: refresh ?? "" }, { as: "admin", org: false }),
   analytics: (days: T.AnalyticsDays) => http.get<T.StaffAnalytics>("/staff/analytics", { days }, { as: "admin", org: false }),
+  mapFarms: (country: string) => http.get<T.StaffMapFarms>("/staff/farms", { country }, { as: "admin", org: false }),
   farmers: (q: string, cursor?: string) => http.get<T.Page<T.StaffFarmer>>("/staff/farmers", { q, cursor }, { as: "admin", org: false }),
 };
