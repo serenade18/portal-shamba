@@ -3,7 +3,7 @@ import { useFarm, useNavigation } from "./api/hooks";
 import { MOCK_MODE } from "./api/client";
 import { AppShell } from "./components/shell/AppShell";
 import { Toaster } from "./components/ui/feedback";
-import { Skeleton } from "./components/ui/feedback";
+import { ErrorState, Skeleton } from "./components/ui/feedback";
 import { AlertsPage } from "./pages/alerts/AlertsPage";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminLayout, RequireAdmin } from "./pages/admin/AdminLayout";
@@ -50,10 +50,16 @@ function FullPageLoading() {
  * empty dashboard. Invited members join farms whose choices are made.
  */
 function RequireSetup() {
-  const { farm, isLoading } = useFarm();
+  const { farm, isLoading, error, refetch } = useFarm();
   const nav = useNavigation();
   const role = useMembership()?.role;
-  if (isLoading || (farm && nav.isLoading)) return <FullPageLoading />;
+  // As in useFarm: only the first attempt shows the loading screen. If navigation
+  // fails, carry on to the portal rather than loop between loading and the page
+  // (every page that mounts would retry it, and each retry reads as "loading").
+  const navLoading = nav.isLoading && nav.errorUpdateCount === 0;
+  if (isLoading || (farm && navLoading)) return <FullPageLoading />;
+  // Couldn't load the farms: say so, rather than send an owner to set up a farm they already have.
+  if (!farm && error) return <div style={{ padding: 32, maxWidth: 720 }}><ErrorState error={error} onRetry={() => refetch()} /></div>;
   if (!farm) return role === "owner" ? <Navigate to="/setup/farm" replace /> : <FullPageLoading />;
   if (nav.data && !nav.data.setup_complete && role === "owner") return <Navigate to="/setup/choose" replace />;
   return <Outlet />;

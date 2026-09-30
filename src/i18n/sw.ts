@@ -53,6 +53,8 @@ const sw: Record<keyof typeof en, string> = {
   "common.hideTable": "Ficha nambari",
 
   "error.unknown": "Kuna hitilafu upande wetu. Jaribu tena baada ya muda mfupi.",
+  "error.not_available": "Sehemu hii ya Shamba OS bado haipatikani.",
+  "error.server_error": "Kuna hitilafu upande wetu. Jaribu tena baada ya muda mfupi.",
   "error.network": "Hatuwezi kufikia Shamba OS. Angalia muunganisho wako na ujaribu tena.",
   "error.validation_error": "Angalia sehemu zilizowekwa alama.",
   "error.permission_denied": "Mmiliki wa shamba au meneja pekee ndiye anaweza kufanya hivi.",

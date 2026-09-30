@@ -33,7 +33,10 @@ export function useFarm() {
   const chosen = useUi((s) => (orgId ? s.farmByOrg[orgId] : undefined));
   const farms = useFarms();
   const farm = farms.data?.find((f) => f.id === chosen) ?? farms.data?.[0] ?? null;
-  return { farm, farms: farms.data ?? [], isLoading: farms.isLoading, error: farms.error };
+  // Loading means the first attempt only. React Query puts a failed query with no data back
+  // into "pending" when it retries, so gating on isLoading alone can loop forever.
+  const isLoading = farms.isLoading && farms.errorUpdateCount === 0;
+  return { farm, farms: farms.data ?? [], isLoading, error: farms.error, refetch: farms.refetch };
 }
 
 export function useFarmId(): string {

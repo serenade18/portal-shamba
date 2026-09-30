@@ -47,6 +47,8 @@ const en = {
   "common.hideTable": "Hide the numbers",
 
   "error.unknown": "Something went wrong on our side. Try again in a moment.",
+  "error.not_available": "This part of Shamba OS isn't available yet.",
+  "error.server_error": "Something went wrong on our side. Try again in a moment.",
   "error.network": "Can't reach Shamba OS. Check your connection and try again.",
   "error.validation_error": "Check the highlighted fields.",
   "error.permission_denied": "Only the farm owner or a manager can do this.",

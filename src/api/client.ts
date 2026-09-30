@@ -90,7 +90,9 @@ export async function sendNetwork(req: RawRequest): Promise<{ status: number; bo
     try {
       body = JSON.parse(text);
     } catch {
-      body = { code: "server_error", message: text.slice(0, 200), params: {}, fields: {} };
+      // Not JSON: an HTML error page (a route the backend doesn't have yet, or a crash). Never show its markup.
+      const code = res.status === 404 ? "not_available" : "server_error";
+      body = { code, message: "", params: {}, fields: {} };
     }
   }
   return { status: res.status, body };
