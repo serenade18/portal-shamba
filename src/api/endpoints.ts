@@ -163,6 +163,9 @@ export const dashboard = {
 export const staff = {
   login: (email: string, password: string, installId: string) =>
     http.post<T.SignInResponse>("/auth/staff/login", { email, password, device: device(installId) }, { auth: false, org: false }),
+  /** Super admin sign-up. Not linked anywhere; the backend answers 404 without the right signup key. */
+  register: (body: T.StaffRegisterInput, signupKey: string, installId: string) =>
+    http.post<T.SignInResponse>("/auth/staff/register", { ...body, device: device(installId) }, { auth: false, org: false, headers: { "X-Signup-Key": signupKey } }),
   logout: (refresh: string | null) => http.post<void>("/auth/logout", { refresh: refresh ?? "" }, { as: "admin", org: false }),
   analytics: (days: T.AnalyticsDays) => http.get<T.StaffAnalytics>("/staff/analytics", { days }, { as: "admin", org: false }),
 };

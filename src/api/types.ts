@@ -73,6 +73,8 @@ export interface RegisterInput {
   locale: Locale;
 }
 
+export type StaffRegisterInput = Omit<RegisterInput, "username">;
+
 export interface Organisation {
   id: string;
   name: string;

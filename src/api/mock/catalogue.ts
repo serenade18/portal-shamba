@@ -12,7 +12,7 @@ export const CATALOGUE: Catalogue = {
     { code: "fish", module: "batches", tracking_mode: "batch", icon: "🐟", labels: { en: "Fish", sw: "Samaki" } },
     { code: "maize", module: "crops", tracking_mode: "crop_season", icon: "🌽", labels: { en: "Maize", sw: "Mahindi" } },
     { code: "beans", module: "crops", tracking_mode: "crop_season", icon: "🫘", labels: { en: "Beans", sw: "Maharagwe" } },
-    { code: "rice", module: "crops", tracking_mode: "crop_season", icon: "🌾", labels: { en: "Rice", sw: "Mchele" } },
+    { code: "rice", module: "crops", tracking_mode: "crop_season", icon: "🌾", labels: { en: "Rice", sw: "Mpunga" } },
     { code: "wheat", module: "crops", tracking_mode: "crop_season", icon: "🌾", labels: { en: "Wheat", sw: "Ngano" } },
   ],
   coming_soon: [

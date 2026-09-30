@@ -284,6 +284,29 @@ route("POST", "/auth/staff/login", (ctx) => {
   return { ...issue(user.id, deviceId), is_new_user: false, device_id: deviceId, user, memberships: [] };
 }, { auth: false, org: false });
 
+// Demo signup key (admin.signUpDemoHint). A wrong key looks like a missing page, as on the backend.
+route("POST", "/auth/staff/register", (ctx) => {
+  if (ctx.req.headers["X-Signup-Key"] !== "shamba-staff-key") throw new MockError(404, "not_found", "Not found.");
+  const db = ctx.db;
+  const b = ctx.body as Record<string, string>;
+  const email = String(b.email ?? "").trim().toLowerCase();
+  const phone = normalizePhone(String(b.phone ?? ""));
+  const fields: Record<string, string[]> = {};
+  if (!String(b.name ?? "").trim()) fields.name = ["Enter your name."];
+  if (!EMAIL.test(email)) fields.email = ["Enter a valid email."];
+  else if (db.users.some((u) => u.email?.toLowerCase() === email)) fields.email = ["An account already uses this email. Sign in instead."];
+  if (!phone) fields.phone = ["Enter a valid Kenyan phone number."];
+  else if (db.users.some((u) => u.phone === phone)) fields.phone = ["An account already uses this number. Sign in instead."];
+  if (String(b.password ?? "").length < 8) fields.password = ["Use at least 8 characters."];
+  if (Object.keys(fields).length) throw new MockError(400, "validation_error", "Check the highlighted fields.", fields);
+  const user: MUser = { id: crypto.randomUUID(), phone: phone!, name: b.name!.trim(), email, username: null, preferred_locale: (b.locale as T.Locale) ?? "en", date_joined: new Date().toISOString() };
+  db.users.push(user);
+  db.staff.push(user.id);
+  db.credentials[user.id] = b.password!;
+  const deviceId = crypto.randomUUID();
+  return { ...issue(user.id, deviceId), is_new_user: true, device_id: deviceId, user, memberships: [] };
+}, { auth: false, org: false, status: 201 });
+
 route("POST", "/auth/token/refresh", (ctx) => {
   const [kind, userId, deviceId] = String(ctx.body.refresh ?? "").split(".");
   if (kind !== "mockr" || !ctx.db.users.some((u) => u.id === userId)) throw new MockError(401, "device_revoked", "This device has been signed out.");
@@ -509,24 +532,36 @@ const SEASON_NAME = () => {
   return m >= 2 && m <= 7 ? { en: "long rains", sw: "masika" } : { en: "short rains", sw: "vuli" };
 };
 
+/** Default names are stored data (the farmer can rename them), so they are written in the farmer's language. */
+function defaultNames(type: T.TypeCode, locale: T.Locale) {
+  const info = typeInfo(type);
+  const label = info.labels[locale];
+  const lower = label.charAt(0).toLowerCase() + label.slice(1);
+  if (locale === "sw") {
+    return { herd: `Kundi la ${lower}`, batch: `${label}, kundi la 1`, plot: `Shamba la ${lower}`, season: `${label}, ${SEASON_NAME().sw}` };
+  }
+  return { herd: `${label} herd`.replace("cows herd", "herd"), batch: `${label}, batch 1`, plot: `${label} field`, season: `${label}, ${SEASON_NAME().en}` };
+}
+
 function createEnterprisesFor(ctx: Ctx, farmId: string, types: T.TypeCode[], counts: Partial<Record<T.TypeCode, number>>) {
   const d = data(ctx);
   const by = me(ctx);
   const today = isoDate(new Date());
+  const locale: T.Locale = ctx.req.headers["Accept-Language"] === "en" ? "en" : "sw";
   for (const type of types) {
     if (d.enterprises.some((e) => e.farm_id === farmId && e.type === type && e.status === "active")) continue;
     const info = typeInfo(type);
-    const label = info.labels.en;
+    const names = defaultNames(type, locale);
     const count = counts[type];
     if (info.module === "livestock") {
-      cmd.startEnterprise(d, { farm: farmId, type, name: `${label} herd`.replace("cows herd", "herd").replace(/^Dairy herd$/, "Dairy herd"), date: today, count: count ?? 0, by });
+      cmd.startEnterprise(d, { farm: farmId, type, name: names.herd, date: today, count: count ?? 0, by });
     } else if (info.module === "batches") {
-      cmd.startEnterprise(d, { farm: farmId, type, name: `${label}, batch 1`, date: today, count: count ?? 0, by });
+      cmd.startEnterprise(d, { farm: farmId, type, name: names.batch, date: today, count: count ?? 0, by });
     } else {
       const acres = count && count > 0 ? count : 1;
-      const plot = { id: crypto.randomUUID(), farm_id: farmId, name: `${label} field`, area_acres: acres.toFixed(2), tenure: "owned" as const, lease_cost: null, growing_now: null };
+      const plot = { id: crypto.randomUUID(), farm_id: farmId, name: names.plot, area_acres: acres.toFixed(2), tenure: "owned" as const, lease_cost: null, growing_now: null };
       d.plots.push(plot);
-      cmd.startEnterprise(d, { farm: farmId, type, name: `${label}, ${SEASON_NAME().en}`, date: today, plot: plot.id, area: acres, by });
+      cmd.startEnterprise(d, { farm: farmId, type, name: names.season, date: today, plot: plot.id, area: acres, by });
     }
   }
 }

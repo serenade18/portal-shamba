@@ -1,11 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, LogOut } from "lucide-react";
+import { BarChart3, LogOut, Menu, ShieldCheck, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import * as api from "@/api/endpoints";
 import { Brand } from "@/components/shell/Brand";
+import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/forms";
-import { useT } from "@/i18n";
-import { initials } from "@/lib/format";
+import { useT, type MsgKey } from "@/i18n";
+import { cx, initials } from "@/lib/format";
 import { useAdminSession } from "@/stores/adminSession";
 import { useUi } from "@/stores/ui";
 
@@ -17,14 +19,26 @@ export function RequireAdmin() {
   return <Outlet />;
 }
 
-/** The staff area: a Charcoal top bar so it never looks like a farm account. */
+/** Staff pages, in sidebar order. Add a page here and it appears in the sidebar. */
+const NAV: { to: string; label: MsgKey; icon: LucideIcon }[] = [
+  { to: "/admin", label: "admin.analytics", icon: BarChart3 },
+];
+
+/** The staff area: the farmer app's sidebar layout in Charcoal, so it never looks like a farm account. */
 export function AdminLayout() {
   const t = useT();
   const navigate = useNavigate();
+  const location = useLocation();
   const qc = useQueryClient();
   const user = useAdminSession((s) => s.user);
   const locale = useUi((s) => s.locale);
   const setLocale = useUi((s) => s.setLocale);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const close = () => setDrawerOpen(false);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   const signOut = async () => {
     const { refresh, signOut } = useAdminSession.getState();
@@ -38,33 +52,49 @@ export function AdminLayout() {
     navigate("/admin/sign-in", { replace: true });
   };
 
+  const name = user?.name || user?.email || "";
+
   return (
-    <div className="admin">
-      <header className="admin-bar">
-        <NavLink to="/admin" className="brand" end>
+    <div className="shell admin-shell">
+      {drawerOpen && <div className="overlay" onClick={close} style={{ zIndex: 54 }} />}
+      <nav className={cx("sidebar", drawerOpen && "open")} aria-label={t("admin.title")}>
+        <NavLink to="/admin" className="brand" end onClick={close}>
           <Brand />
         </NavLink>
-        <span className="admin-badge">{t("admin.title")}</span>
-        <nav className="admin-nav" aria-label={t("admin.title")}>
-          <NavLink to="/admin" end className={({ isActive }) => (isActive ? "active" : undefined)}>
-            <BarChart3 size={18} aria-hidden /> {t("admin.analytics")}
+        <span className="admin-badge"><ShieldCheck size={14} aria-hidden /> <span className="nav-text">{t("admin.title")}</span></span>
+        {NAV.map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to} end={to === "/admin"} className={({ isActive }) => cx("nav-link", isActive && "active")} onClick={close} aria-label={t(label)}>
+            <Icon size={20} aria-hidden />
+            <span className="nav-text">{t(label)}</span>
+            <span className="nav-tip" aria-hidden>{t(label)}</span>
           </NavLink>
-        </nav>
-        <span style={{ flex: 1 }} />
-        <Segmented label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "en", label: "EN" }, { value: "sw", label: "SW" }]} />
+        ))}
+        <div className="nav-spacer" />
         {user && (
-          <span className="admin-user" title={user.email ?? undefined}>
-            <span className="avatar" aria-hidden>{initials(user.name || user.email || "S")}</span>
-            <span className="hide-sm">{user.name || user.email}</span>
-          </span>
+          <div className="admin-user" title={user.email ?? undefined}>
+            <span className="avatar" aria-hidden>{initials(name || "S")}</span>
+            <span className="nav-text">
+              <span className="admin-user-name">{name}</span>
+              {user.name && user.email && <span className="admin-user-email">{user.email}</span>}
+            </span>
+          </div>
         )}
-        <button type="button" className="admin-signout" onClick={signOut}>
-          <LogOut size={18} aria-hidden /> <span className="hide-sm">{t("admin.signOut")}</span>
+        <button type="button" className="nav-link" onClick={signOut} aria-label={t("admin.signOut")}>
+          <LogOut size={20} aria-hidden />
+          <span className="nav-text">{t("admin.signOut")}</span>
+          <span className="nav-tip" aria-hidden>{t("admin.signOut")}</span>
         </button>
-      </header>
-      <main className="admin-content" id="main">
-        <Outlet />
-      </main>
+      </nav>
+      <div className="main">
+        <header className="topbar">
+          <Button variant="quiet" className="menu-btn" onClick={() => setDrawerOpen(true)} aria-label={t("nav.menu")} icon={<Menu size={22} />} />
+          <span className="grow" />
+          <Segmented label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "en", label: "EN" }, { value: "sw", label: "SW" }]} />
+        </header>
+        <main className="content" id="main">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

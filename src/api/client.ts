@@ -42,6 +42,8 @@ export interface RequestOptions {
   auth?: boolean;
   /** Whose tokens to send: the farmer session (default) or the staff admin session. */
   as?: Who;
+  /** Extra request headers. */
+  headers?: Record<string, string>;
 }
 
 type Who = "farmer" | "admin";
@@ -97,7 +99,7 @@ function buildRequest(method: string, path: string, opts: RequestOptions): RawRe
   const s = store(opts.as);
   const orgId = opts.as === "admin" ? null : useSession.getState().activeOrgId;
   // Django localises its messages (field errors included) by Accept-Language.
-  const headers: Record<string, string> = { "Accept-Language": useUi.getState().locale };
+  const headers: Record<string, string> = { "Accept-Language": useUi.getState().locale, ...opts.headers };
   if (opts.auth !== false && s.access) headers.Authorization = `Bearer ${s.access}`;
   if (opts.org !== false && orgId) headers["X-Org-Id"] = orgId;
   const query = new URLSearchParams();

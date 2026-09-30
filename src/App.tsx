@@ -8,6 +8,7 @@ import { AlertsPage } from "./pages/alerts/AlertsPage";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminLayout, RequireAdmin } from "./pages/admin/AdminLayout";
 import { AdminSignIn } from "./pages/admin/AdminSignIn";
+import { AdminSignUp } from "./pages/admin/AdminSignUp";
 import { ResetPassword } from "./pages/auth/ResetPassword";
 import { SignIn } from "./pages/auth/SignIn";
 import { FarmSetup } from "./pages/auth/FarmSetup";
@@ -62,6 +63,8 @@ const router = createBrowserRouter([
   { path: "/reset-password", element: <ResetPassword /> },
   // Shamba OS staff: a separate sign-in and session (stores/adminSession).
   { path: "/admin/sign-in", element: <AdminSignIn /> },
+  // Super admin sign-up: not linked from anywhere, and useless without the server's signup key.
+  { path: "/admin/sign-up", element: <AdminSignUp /> },
   {
     path: "/admin",
     element: <RequireAdmin />,
