@@ -189,11 +189,28 @@ export interface OnboardingInput {
 
 /* ---------- Farms (planned) ---------- */
 
+/** GeoJSON Polygon: one closed ring of [lng, lat]. */
+export interface Boundary {
+  type: "Polygon";
+  coordinates: [number, number][][];
+}
+
+/** Whether the farm's boundary is registered with the OpenWeather Agro API. */
+export interface WeatherSync {
+  status: "none" | "pending" | "registered" | "failed" | "skipped";
+  /** Under 1 ha: registered grown to the API's 1 ha minimum. */
+  scaled: boolean;
+}
+
 export interface Farm {
   id: string;
   name: string;
   county: string;
   location: { lat: number; lng: number } | null;
+  /** The farm's drawn edge, if the farmer has drawn it. */
+  boundary?: Boundary | null;
+  area_ha?: string | null;
+  weather_sync?: WeatherSync;
   setup_complete: boolean;
   created_at: string;
 }
@@ -610,6 +627,9 @@ export interface StaffMapFarm {
   name: string;
   county: string;
   location: { lat: number; lng: number } | null;
+  boundary?: Boundary | null;
+  area_ha?: string | null;
+  weather_sync?: WeatherSync;
   setup_complete: boolean;
   created_at: string;
   organisation: { id: string; name: string };

@@ -6,6 +6,7 @@
 import { normalizePhone } from "@/lib/phone";
 import { useSession } from "@/stores/session";
 import { MOCK_MODE, sendNetwork, type RawRequest } from "../client";
+import { boundaryProblem, fromPolygon, hectares, toPolygon } from "@/lib/geo";
 import type * as T from "../types";
 import { CATALOGUE, TYPE_FEED, TYPE_ITEMS, TYPE_OUTPUT, typeInfo } from "./catalogue";
 import * as cmd from "./commands";
@@ -518,11 +519,24 @@ async function createPayment(ctx: Ctx, sale: MSale, phoneRaw: string, network: s
 
 route("GET", "/catalogue", () => CATALOGUE, { org: false });
 
+/** As the backend: keep the ring, work out the area, pin the centre if there's no GPS fix. */
+function setBoundary(f: T.Farm, b: T.Boundary | null) {
+  const ring = fromPolygon(b);
+  if (b && boundaryProblem(ring)) throw new MockError(400, "validation_error", "Check the highlighted fields.", { boundary: ["The boundary crosses itself. Mark the corners in order around the farm."] });
+  f.boundary = ring.length >= 3 ? toPolygon(ring) : null;
+  f.area_ha = ring.length >= 3 ? hectares(ring).toFixed(4) : null;
+  f.weather_sync = { status: ring.length >= 3 ? "registered" : "none", scaled: ring.length >= 3 && hectares(ring) < 1 };
+  if (ring.length >= 3 && !f.location) {
+    f.location = { lat: ring.reduce((a, p) => a + p[1], 0) / ring.length, lng: ring.reduce((a, p) => a + p[0], 0) / ring.length };
+  }
+}
+
 route("GET", "/farms", (ctx) => paginate(data(ctx).farms, ctx.q, 100));
 route("POST", "/farms", (ctx) => {
   need(ctx, "org.settings");
   requireFields(ctx.body, "name");
   const farm: T.Farm = { id: crypto.randomUUID(), name: String(ctx.body.name).trim(), county: ctx.body.county ?? "", location: ctx.body.location ?? null, setup_complete: false, created_at: new Date().toISOString() };
+  setBoundary(farm, ctx.body.boundary ?? null);
   data(ctx).farms.push(farm);
   // The farmer never names the organisation (ACC-02): it takes the first farm's name.
   const org = ctx.db.orgs.find((o) => o.id === ctx.orgId);
@@ -533,6 +547,7 @@ route("PATCH", "/farms/:id", (ctx) => {
   need(ctx, "org.settings");
   const f = farmOf(ctx, ctx.params.id);
   for (const k of ["name", "county", "location"] as const) if (ctx.body[k] !== undefined) (f as unknown as Record<string, unknown>)[k] = ctx.body[k];
+  if (ctx.body.boundary !== undefined) setBoundary(f, ctx.body.boundary);
   return f;
 });
 
@@ -1524,7 +1539,7 @@ const DEMO_COUNTRIES = [
 ];
 /** Demo farms for the staff map, placed near real farming towns. */
 const DEMO_TOWNS: Record<string, [string, string, number, number][]> = {
-  KE: [["Chebet dairy", "Uasin Gishu", 0.514, 35.27], ["Nakuru vegetables", "Nakuru", -0.303, 36.08], ["Otieno fish ponds", "Kisumu", -0.091, 34.77], ["Narok wheat", "Narok", -1.08, 35.87], ["Kitale maize", "Trans Nzoia", 1.015, 35.0], ["Meru bananas", "Meru", 0.047, 37.65], ["Machakos goats", "Machakos", -1.517, 37.26]],
+  KE: [["Chebet dairy", "Uasin Gishu", 0.5143, 35.2698], ["Nakuru vegetables", "Nakuru", -0.303, 36.08], ["Otieno fish ponds", "Kisumu", -0.091, 34.77], ["Narok wheat", "Narok", -1.08, 35.87], ["Kitale maize", "Trans Nzoia", 1.015, 35.0], ["Meru bananas", "Meru", 0.047, 37.65], ["Machakos goats", "Machakos", -1.517, 37.26]],
   UG: [["Nakato coffee", "Wakiso", 0.404, 32.46], ["Mbarara dairy", "Mbarara", -0.607, 30.65], ["Gulu sesame", "Gulu", 2.78, 32.3]],
   TZ: [["Arusha vegetables", "Arusha", -3.387, 36.68], ["Morogoro rice", "Morogoro", -6.827, 37.66], ["Mbeya potatoes", "Mbeya", -8.9, 33.46]],
   RW: [["Musanze potatoes", "Musanze", -1.5, 29.63], ["Huye coffee", "Huye", -2.6, 29.74]],
@@ -1548,6 +1563,12 @@ route("GET", "/staff/farms", (ctx) => {
   const country = (ctx.q.get("country") ?? "").toUpperCase();
   const demo: T.StaffMapFarm[] = (DEMO_TOWNS[country] ?? []).map(([name, county, lat, lng], i) => ({
     id: `demo-${country}-${i}`, name, county, location: { lat, lng }, setup_complete: true, created_at: "2026-06-01T08:00:00Z",
+    // One drawn boundary (~0.6 ha) so the demo shows what staff see when farmers draw theirs.
+    ...(i === 0 && country === "KE" ? {
+      boundary: toPolygon([[35.2694, 0.5146], [35.2702, 0.5147], [35.2703, 0.514], [35.2695, 0.5139]]),
+      area_ha: hectares([[35.2694, 0.5146], [35.2702, 0.5147], [35.2703, 0.514], [35.2695, 0.5139]]).toFixed(4),
+      weather_sync: { status: "registered" as const, scaled: true },
+    } : {}),
     organisation: { id: `demo-org-${country}-${i}`, name }, owner: { name: name.split(" ")[0]!, phone: "+254700000000" },
   }));
   return { country, farms: [...(country === "KE" ? realDemoFarms(ctx) : []), ...demo], truncated: false } satisfies T.StaffMapFarms;

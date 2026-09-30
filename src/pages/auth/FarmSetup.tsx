@@ -1,20 +1,24 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, LocateFixed } from "lucide-react";
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import * as api from "@/api/endpoints";
-import { useErrorText, useFarms, useKey } from "@/api/hooks";
+import { fieldErrors, useErrorText, useFarms, useKey } from "@/api/hooks";
 import type { Farm } from "@/api/types";
 import { Brand } from "@/components/shell/Brand";
 import { Button } from "@/components/ui/Button";
-import { Notice } from "@/components/ui/feedback";
+import { Notice, Skeleton } from "@/components/ui/feedback";
 import { FormError, SelectField, TextField } from "@/components/ui/forms";
 import { useT } from "@/i18n";
 import { COUNTIES } from "@/lib/counties";
+import { boundaryProblem, toPolygon, type LngLat } from "@/lib/geo";
 import { useSession } from "@/stores/session";
 import { useUi } from "@/stores/ui";
 
-/** Farm name and location (FRM-01): GPS, or the county as a fallback. */
+// Leaflet loads only when a farmer opens the boundary map.
+export const BoundaryEditor = lazy(() => import("@/components/map/BoundaryEditor"));
+
+/** Farm name and location (FRM-01): GPS, or the county as a fallback, and optionally the farm's boundary. */
 export function FarmForm({ onDone, submitLabel }: { onDone: (farm: Farm) => void; submitLabel: string }) {
   const t = useT();
   const errorText = useErrorText();
@@ -24,13 +28,15 @@ export function FarmForm({ onDone, submitLabel }: { onDone: (farm: Farm) => void
   const [county, setCounty] = useState("");
   const [yourName, setYourName] = useState(user?.name ?? "");
   const [location, setLocation] = useState<Farm["location"]>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [ring, setRing] = useState<LngLat[]>([]);
   const [gps, setGps] = useState<"idle" | "busy" | "failed">("idle");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const create = useMutation({
     mutationFn: async () => {
       if (yourName.trim() && yourName.trim() !== user?.name) setUser(await api.me.update({ name: yourName.trim() }));
-      return api.farms.create({ name: name.trim(), county, location });
+      return api.farms.create({ name: name.trim(), county, location, boundary: toPolygon(ring) });
     },
     onSuccess: onDone,
   });
@@ -51,7 +57,9 @@ export function FarmForm({ onDone, submitLabel }: { onDone: (farm: Farm) => void
   const submit = () => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = t("setup.farmNameRequired");
-    if (!county && !location) e.county = t("setup.countyRequired");
+    if (!county && !location && ring.length < 3) e.county = t("setup.countyRequired");
+    const problem = boundaryProblem(ring);
+    if (problem) e.boundary = t(problem === "crosses" ? "boundary.crosses" : problem === "big" ? "boundary.tooBig" : "boundary.needMore", { n: ring.length });
     setErrors(e);
     if (!Object.keys(e).length) create.mutate();
   };
@@ -88,8 +96,22 @@ export function FarmForm({ onDone, submitLabel }: { onDone: (farm: Farm) => void
         placeholder={t("setup.countyPlaceholder")}
         options={COUNTIES.map((c) => ({ value: c, label: c }))}
         error={errors.county}
-        optional={!!location}
+        optional={!!location || ring.length >= 3}
       />
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="field-label">{t("boundary.title")} <span className="muted small">({t("common.optional")})</span></span>
+        <p className="small muted">{t("boundary.help")}</p>
+        {drawing ? (
+          <Suspense fallback={<Skeleton height={360} />}>
+            <BoundaryEditor value={ring} onChange={setRing} center={location} />
+          </Suspense>
+        ) : (
+          <div>
+            <Button onClick={() => setDrawing(true)}>{t("boundary.start")}</Button>
+          </div>
+        )}
+        {(errors.boundary || fieldErrors(create.error).boundary) && <p className="small ink-cost">{errors.boundary || fieldErrors(create.error).boundary}</p>}
+      </div>
       <FormError message={create.error ? errorText(create.error) : null} />
       <Button type="submit" variant="primary" block loading={create.isPending}>
         {submitLabel}

@@ -50,8 +50,8 @@ export const catalogue = {
 
 export const farms = {
   list: () => http.get<T.Page<T.Farm>>("/farms"),
-  create: (body: { name: string; county: string; location: T.Farm["location"] }) => http.post<T.Farm>("/farms", body),
-  update: (id: string, body: Partial<Pick<T.Farm, "name" | "county" | "location">>) => http.patch<T.Farm>(`/farms/${id}`, body),
+  create: (body: { name: string; county: string; location: T.Farm["location"]; boundary?: T.Boundary | null }) => http.post<T.Farm>("/farms", body),
+  update: (id: string, body: Partial<Pick<T.Farm, "name" | "county" | "location" | "boundary">>) => http.patch<T.Farm>(`/farms/${id}`, body),
   navigation: (farmId: string) => http.get<T.Navigation>("/navigation", { farm_id: farmId }),
   onboard: (body: T.OnboardingInput) => http.post<T.Navigation>("/onboarding", body),
   setTypes: (farmId: string, picks: T.TypeCode[]) => http.post<T.Navigation>(`/farms/${farmId}/types`, { picks }),

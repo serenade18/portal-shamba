@@ -170,6 +170,18 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
     for (const f of farms) {
       if (!f.location) continue;
       const selected = f.id === view.farmId;
+      // The farmer's drawn boundary, visible once zoomed in far enough to matter.
+      if (f.boundary) {
+        const edge = L.polygon(f.boundary.coordinates[0]!.map(([lng, lat]) => [lat, lng] as L.LatLngTuple), {
+          pane: "farms",
+          color: token(selected ? "var(--lavender)" : "var(--surface)"),
+          weight: selected ? 3 : 2,
+          fillOpacity: selected ? 0.15 : 0.05,
+          fillColor: token("var(--lavender)"),
+        });
+        edge.on("click", () => setView((v) => ({ country: v.country, farmId: f.id })));
+        group.addLayer(edge);
+      }
       const dot = L.circleMarker([f.location.lat, f.location.lng], {
         pane: "farms",
         radius: selected ? 10 : 7,
@@ -189,7 +201,10 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-    if (farm?.location) {
+    if (farm?.boundary) {
+      const edge = farm.boundary.coordinates[0]!.map(([lng, lat]) => [lat, lng] as L.LatLngTuple);
+      m.flyToBounds(edge, { padding: [48, 48], maxZoom: 18, duration: 1.2 });
+    } else if (farm?.location) {
       m.flyTo([farm.location.lat, farm.location.lng], FARM_ZOOM, { duration: 1.2 });
     } else if (view.country && !view.farmId) {
       const s = shapeByCode.get(view.country);
@@ -302,6 +317,17 @@ function FarmDetail({ farm, country, onBack }: { farm: StaffMapFarm; country: st
           <>
             <dt>{t("admin.map.county")}</dt>
             <dd>{farm.county}</dd>
+          </>
+        )}
+        {farm.area_ha && (
+          <>
+            <dt>{t("admin.map.area")}</dt>
+            <dd>
+              {t("boundary.area", { acres: (Number(farm.area_ha) * 2.4710538).toFixed(2), ha: Number(farm.area_ha).toFixed(2) })}
+              {farm.weather_sync && farm.weather_sync.status !== "none" && (
+                <><br /><span className="muted">{t(`boundary.sync.${farm.weather_sync.status}`)}{farm.weather_sync.scaled && farm.weather_sync.status === "registered" ? ` ${t("admin.map.scaled")}` : ""}</span></>
+              )}
+            </dd>
           </>
         )}
         <dt>{t("admin.map.coordinates")}</dt>

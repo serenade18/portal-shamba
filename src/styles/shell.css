@@ -1421,3 +1421,53 @@
   height: 14px;
   border-radius: 3px;
 }
+
+/* Drawing a farm boundary on satellite imagery */
+.boundary-map {
+  position: relative;
+  isolation: isolate; /* keep Leaflet's z-indexes under dialogs and the drawer */
+  z-index: 0;
+}
+.boundary-leaflet {
+  height: 360px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  cursor: crosshair;
+}
+.boundary-map .leaflet-container {
+  font: inherit;
+}
+.boundary-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 500;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  pointer-events: none;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 100% no-repeat,
+    linear-gradient(#fff, #fff) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.9));
+}
+.corner-handle {
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--green-600);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5);
+  cursor: grab;
+}
+.corner-handle.first {
+  background: var(--lavender);
+}
+.boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+@media (max-width: 767px) {
+  .boundary-leaflet {
+    height: 300px;
+  }
+}

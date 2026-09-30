@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useCatalogue, useErrorText, useFarm, useKey, useNavigation } from "@/api/hooks";
@@ -8,19 +8,73 @@ import type { Invitation, Locale, Member, Role, TypeCode } from "@/api/types";
 import { useSetLocale } from "@/components/shell/TopBar";
 import { Button } from "@/components/ui/Button";
 import { PageHead, Panel, Table, Tabs, useTabParam } from "@/components/ui/data";
-import { Chip, EmptyState, ErrorState, Notice, SkeletonRows } from "@/components/ui/feedback";
+import { Chip, EmptyState, ErrorState, Notice, Skeleton, SkeletonRows } from "@/components/ui/feedback";
 import { ChoiceCards, FormError, SelectField, TextField } from "@/components/ui/forms";
 import { ConfirmDialog, SidePanel } from "@/components/ui/overlay";
 import { useT } from "@/i18n";
 import { COUNTIES } from "@/lib/counties";
+import { acres, boundaryProblem, fromPolygon, toPolygon, type LngLat } from "@/lib/geo";
 import { formatDate } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { useCan, useMembership, useSession } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useUi } from "@/stores/ui";
-import { FarmForm } from "../../pages/auth/FarmSetup";
+import { BoundaryEditor, FarmForm } from "../../pages/auth/FarmSetup";
 import { useInvalidateOrg } from "../enterprise/forms";
 import { TypeTiles } from "../onboarding/TypeTiles";
+
+/** The farm's drawn boundary (FRM-01/03), used for weather and, later, satellite data. */
+function FarmBoundary() {
+  const t = useT();
+  const errorText = useErrorText();
+  const { farm } = useFarm();
+  const invalidate = useInvalidateOrg();
+  const [ring, setRing] = useState<LngLat[]>(() => fromPolygon(farm?.boundary));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    setRing(fromPolygon(farm?.boundary));
+    setEditing(false);
+  }, [farm?.id, farm?.boundary]);
+  const save = useMutation({
+    mutationFn: () => api.farms.update(farm!.id, { boundary: toPolygon(ring) }),
+    onSuccess: () => (invalidate(), setEditing(false), toast(t("boundary.saved"))),
+  });
+  if (!farm) return null;
+
+  const problem = boundaryProblem(ring);
+  const saved = fromPolygon(farm.boundary);
+  const sync = farm.weather_sync?.status ?? "none";
+
+  return (
+    <Panel title={t("boundary.title")}>
+      <div className="stack" style={{ maxWidth: 720 }}>
+        <p className="small muted">{t("boundary.help")}</p>
+        {saved.length >= 3 && !editing && (
+          <p>
+            <strong>{t("boundary.area", { acres: acres(saved).toFixed(2), ha: Number(farm.area_ha ?? 0).toFixed(2) })}</strong>
+            {sync !== "none" && <span className="small muted"> · {t(`boundary.sync.${sync}`)}</span>}
+          </p>
+        )}
+        {editing ? (
+          <>
+            <Suspense fallback={<Skeleton height={360} />}>
+              <BoundaryEditor value={ring} onChange={setRing} center={farm.location} />
+            </Suspense>
+            <FormError message={save.error ? fieldErrors(save.error).boundary || errorText(save.error) : null} />
+            <div className="row" style={{ gap: 8 }}>
+              <Button variant="primary" onClick={() => save.mutate()} loading={save.isPending} disabled={!!problem}>{t("common.save")}</Button>
+              <Button variant="quiet" onClick={() => (setRing(saved), setEditing(false))}>{t("common.cancel")}</Button>
+            </div>
+          </>
+        ) : (
+          <div>
+            <Button onClick={() => setEditing(true)}>{saved.length >= 3 ? t("boundary.redraw") : t("boundary.start")}</Button>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
 
 function FarmDetails() {
   const t = useT();
@@ -62,6 +116,7 @@ function FarmDetails() {
           </div>
         </form>
       </Panel>
+      <FarmBoundary />
       <Panel title={t("settings.newFarm")}>
         <div className="stack">
           <p className="muted">{t("settings.newFarmHelp")}</p>
