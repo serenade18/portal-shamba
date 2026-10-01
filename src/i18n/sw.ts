@@ -131,7 +131,7 @@ const sw: Record<keyof typeof en, string> = {
   "nav.stock": "Stoo",
   "nav.sales": "Mauzo",
   "nav.purchases": "Manunuzi",
-  "nav.money": "Pesa",
+  "nav.money": "Fedha",
   "nav.weather": "Hali ya hewa",
   "nav.settings": "Mipangilio",
   "nav.menu": "Menyu",
@@ -644,7 +644,7 @@ const sw: Record<keyof typeof en, string> = {
   "supp.owed": "Unadaiwa",
   "supp.empty": "Bado hakuna wasambazaji. Ongeza mmoja unaporekodi manunuzi.",
 
-  "money.title": "Pesa",
+  "money.title": "Fedha",
   "money.record": "Rekodi gharama au mapato",
   "money.tab.profit": "Faida",
   "money.tab.entries": "Mapato na gharama",

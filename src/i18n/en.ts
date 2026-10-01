@@ -125,7 +125,7 @@ const en = {
   "nav.stock": "Stock",
   "nav.sales": "Sales",
   "nav.purchases": "Purchases",
-  "nav.money": "Money",
+  "nav.money": "Finances",
   "nav.weather": "Weather",
   "nav.settings": "Settings",
   "nav.menu": "Menu",
@@ -638,7 +638,7 @@ const en = {
   "supp.owed": "You owe",
   "supp.empty": "No suppliers yet. Add one when you record a purchase.",
 
-  "money.title": "Money",
+  "money.title": "Finances",
   "money.record": "Record expense or income",
   "money.tab.profit": "Profit",
   "money.tab.entries": "Income and expenses",

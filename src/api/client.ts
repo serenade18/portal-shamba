@@ -24,13 +24,22 @@ const IMPLEMENTED = [
   /^\/navigation$/,
   /^\/weather$/,
   /^\/alerts(\/[0-9a-f-]{36}\/seen)?$/,
-  /^\/dashboard$/, // money and stock figures are 0 until those modules exist
+  /^\/dashboard$/,
   /^\/items(\/[0-9a-f-]{36})?$/,
   /^\/enterprises(\/[0-9a-f-]{36}(\/(records|health|production|close-summary|close))?)?$/,
   /^\/animals(\/[0-9a-f-]{36}\/exit)?$/,
   /^\/(milk-records|feeding-records|treatments)$/,
   /^\/batches(\/[0-9a-f-]{36}\/days)?$/,
   /^\/seasons(\/[0-9a-f-]{36}\/(activities|harvests))?$/,
+  /^\/plots(\/[0-9a-f-]{36}\/history)?$/,
+  /^\/structures$/,
+  /^\/stock\/(balances|movements|counts|transfers|movements\/[0-9a-f-]{36}\/reverse)$/,
+  /^\/(customers|suppliers)$/,
+  /^\/sales(\/[0-9a-f-]{36}(\/payments)?)?$/,
+  /^\/purchases(\/[0-9a-f-]{36}\/payments)?$/,
+  /^\/finance\/entries$/,
+  /^\/reports\/(profit|cost-per-unit)$/,
+  /^\/exports$/,
   /^\/staff\//, // staff analytics and integration keys (the admin area)
   /^\/config\/public$/, // browser-safe keys, e.g. the Cesium ion token
 ];
