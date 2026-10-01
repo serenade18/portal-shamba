@@ -169,6 +169,7 @@ export const staff = {
   logout: (refresh: string | null) => http.post<void>("/auth/logout", { refresh: refresh ?? "" }, { as: "admin", org: false }),
   analytics: (days: T.AnalyticsDays) => http.get<T.StaffAnalytics>("/staff/analytics", { days }, { as: "admin", org: false }),
   mapFarms: (country: string) => http.get<T.StaffMapFarms>("/staff/farms", { country }, { as: "admin", org: false }),
+  farmer: (id: string) => http.get<T.StaffFarmerDetail>(`/staff/farmers/${id}`, undefined, { as: "admin", org: false }),
   farmers: (q: string, cursor?: string) => http.get<T.Page<T.StaffFarmer>>("/staff/farmers", { q, cursor }, { as: "admin", org: false }),
   /** Integration keys. Super admins only; other staff get 403. */
   keys: () => http.get<{ keys: T.ManagedKey[] }>("/staff/keys", undefined, { as: "admin", org: false }),

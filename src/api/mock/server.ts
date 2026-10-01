@@ -1578,6 +1578,81 @@ route("GET", "/staff/farms", (ctx) => {
   }));
   return { country, farms: [...(country === "KE" ? realDemoFarms(ctx) : []), ...demo], truncated: false } satisfies T.StaffMapFarms;
 }, { org: false });
+const ACRES_PER_HA = 2.4710538;
+
+/** Land under some organisations' farms, the way the backend counts it (apps/staff/selectors.py: land). */
+function mockLand(data: OrgData[]): T.StaffLand {
+  let mapped = 0, declared = 0, mappedFarms = 0, declaredFarms = 0, farms = 0;
+  for (const d of data) {
+    for (const f of d.farms) {
+      farms++;
+      if (f.area_ha) {
+        mapped += Number(f.area_ha) * ACRES_PER_HA;
+        mappedFarms++;
+        continue;
+      }
+      const plots = d.plots.filter((p) => p.farm_id === f.id);
+      if (plots.length) {
+        declared += plots.reduce((a, p) => a + Number(p.area_acres), 0);
+        declaredFarms++;
+      }
+    }
+  }
+  return {
+    acres: (mapped + declared).toFixed(2), hectares: ((mapped + declared) / ACRES_PER_HA).toFixed(2),
+    mapped_acres: mapped.toFixed(2), mapped_farms: mappedFarms, declared_acres: declared.toFixed(2), declared_farms: declaredFarms,
+    unknown_farms: farms - mappedFarms - declaredFarms, farms,
+  };
+}
+
+function addLand(a: T.StaffLand, b: T.StaffLand): T.StaffLand {
+  const acres = Number(a.acres) + Number(b.acres);
+  return {
+    acres: acres.toFixed(2), hectares: (acres / ACRES_PER_HA).toFixed(2),
+    mapped_acres: (Number(a.mapped_acres) + Number(b.mapped_acres)).toFixed(2), mapped_farms: a.mapped_farms + b.mapped_farms,
+    declared_acres: (Number(a.declared_acres) + Number(b.declared_acres)).toFixed(2), declared_farms: a.declared_farms + b.declared_farms,
+    unknown_farms: a.unknown_farms + b.unknown_farms, farms: a.farms + b.farms,
+  };
+}
+
+route("GET", "/staff/farmers/:id", (ctx) => {
+  if (!ctx.db.staff.includes(ctx.userId ?? "")) throw new MockError(403, "permission_denied", "You do not have permission to do this.");
+  const u = ctx.db.users.find((x) => x.id === ctx.params.id && !ctx.db.staff.includes(x.id));
+  if (!u) throw new MockError(404, "staff.farmer_not_found", "Not found.");
+  const memberships = ctx.db.memberships.filter((m) => m.user_id === u.id);
+  const seen = new Date(Date.now() - 3 * 3_600_000).toISOString();
+  return {
+    id: u.id, name: u.name, phone: u.phone, email: u.email, username: u.username, preferred_locale: u.preferred_locale,
+    is_active: true, date_joined: u.date_joined, last_seen_at: seen,
+    land: mockLand(memberships.filter((m) => m.is_active).flatMap((m) => (ctx.db.data[m.org_id] ? [ctx.db.data[m.org_id]!] : []))),
+    accounts: memberships.map((m) => {
+      const o = ctx.db.orgs.find((x) => x.id === m.org_id)!;
+      const d = ctx.db.data[m.org_id];
+      return {
+        id: o.id, name: o.name, country: "KE", currency: "KES", is_active: true, role: m.role, membership_active: m.is_active,
+        joined_at: u.date_joined, removed_at: null, members: ctx.db.memberships.filter((x) => x.org_id === o.id && x.is_active).length,
+        farms: (d?.farms ?? []).map((f) => {
+          const plots = d!.plots.filter((p) => p.farm_id === f.id);
+          const active = d!.enterprises.filter((e) => e.farm_id === f.id && e.status === "active");
+          const enterprises: Partial<Record<"livestock" | "batches" | "crops", number>> = {};
+          for (const e of active) enterprises[e.module] = (enterprises[e.module] ?? 0) + 1;
+          return {
+            ...f, types: d!.picks[f.id] ?? [], enterprises,
+            plots_acres: plots.length ? plots.reduce((a, p) => a + Number(p.area_acres), 0).toFixed(2) : null,
+          };
+        }),
+        payments: { requests: 14, succeeded: 12, collected: "38450.00" },
+      };
+    }),
+    devices: [{ id: "demo-device", platform: "android", name: "Tecno Spark 20", app_version: "1.4.0", created_at: u.date_joined, last_seen_at: seen, revoked: false }],
+    activity: [
+      { action: "auth.signed_in", entity: "identity.user", occurred_at: seen, organisation: null },
+      { action: "enterprise.started", entity: "farms.enterprise", occurred_at: new Date(Date.now() - 26 * 3_600_000).toISOString(), organisation: ctx.db.orgs.find((o) => o.id === memberships[0]?.org_id)?.name ?? null },
+      { action: "farm.updated", entity: "farms.farm", occurred_at: new Date(Date.now() - 50 * 3_600_000).toISOString(), organisation: ctx.db.orgs.find((o) => o.id === memberships[0]?.org_id)?.name ?? null },
+    ],
+  } satisfies T.StaffFarmerDetail;
+}, { org: false });
+
 function farmerRow(ctx: Ctx, u: MUser, i: number): T.StaffFarmer {
   const m = ctx.db.memberships.find((x) => x.user_id === u.id && x.is_active);
   const joined = new Date(Date.now() - (i * 7 + 2) * 3_600_000);
@@ -1708,6 +1783,10 @@ route("GET", "/staff/analytics", (ctx) => {
       active_farmers: { count: Math.round(640 * (1 + days / 150)), previous: Math.round(590 * (1 + days / 150)) },
       payments: { collected: money(collected), previous_collected: money(prev.reduce((a, r) => a + Number(r.collected), 0)), requests, succeeded, success_rate: Math.round((succeeded / Math.round(requests * 0.97)) * 100) },
       pending_invitations: 37,
+      // The demo's own farms plus a believable platform-wide figure.
+      land: addLand(mockLand(ctx.db.orgs.flatMap((o) => ctx.db.data[o.id] ? [ctx.db.data[o.id]!] : [])), {
+        acres: "18342.60", hectares: "0", mapped_acres: "11205.40", mapped_farms: 1630, declared_acres: "7137.20", declared_farms: 1288, unknown_farms: 403, farms: 3321,
+      }),
     },
     daily,
     funnel: [

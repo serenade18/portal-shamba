@@ -621,6 +621,53 @@ export interface StaffFarmer {
   is_active: boolean;
 }
 
+/**
+ * Land under a set of farms, in acres. A farm with a drawn boundary counts its
+ * measured area; one without counts the plot sizes its farmer entered; one with
+ * neither counts nothing (`unknown_farms`).
+ */
+export interface StaffLand {
+  acres: string;
+  hectares: string;
+  mapped_acres: string;
+  mapped_farms: number;
+  declared_acres: string;
+  declared_farms: number;
+  unknown_farms: number;
+  farms: number;
+}
+
+/** One farmer in full (GET /staff/farmers/{id}). */
+export interface StaffFarmerDetail {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  username: string | null;
+  preferred_locale: Locale;
+  is_active: boolean;
+  date_joined: string;
+  last_seen_at: string | null;
+  /** In the accounts they still belong to. */
+  land: StaffLand;
+  accounts: {
+    id: string;
+    name: string;
+    country: string;
+    currency: string;
+    is_active: boolean;
+    role: Role;
+    membership_active: boolean;
+    joined_at: string;
+    removed_at: string | null;
+    members: number;
+    farms: (Farm & { plots_acres: string | null; types: string[]; enterprises: Partial<Record<"livestock" | "batches" | "crops", number>> })[];
+    payments: { requests: number; succeeded: number; collected: string };
+  }[];
+  devices: { id: string; platform: "android" | "ios" | "web"; name: string; app_version: string; created_at: string; last_seen_at: string; revoked: boolean }[];
+  activity: { action: string; entity: string; occurred_at: string; organisation: string | null }[];
+}
+
 /** One farm on the staff map (GET /staff/farms?country=). */
 export interface StaffMapFarm {
   id: string;
@@ -655,6 +702,7 @@ export interface StaffAnalytics {
     active_farmers: { count: number; previous: number };
     payments: { collected: string; previous_collected: string; requests: number; succeeded: number; success_rate: number | null };
     pending_invitations: number;
+    land: StaffLand;
   };
   daily: { date: string; signups: number; organisations: number; active_farmers: number; collected: string }[];
   funnel: { step: "signed_up" | "farm_account" | "added_member" | "requested_payment"; count: number }[];

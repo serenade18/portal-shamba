@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { ApiError } from "@/api/client";
 import * as api from "@/api/endpoints";
 import { usePaged } from "@/api/hooks";
@@ -15,6 +16,7 @@ import { useAdminSession } from "@/stores/adminSession";
 /** /admin/farmers: every farmer who has signed up (GET /staff/farmers), searchable. */
 export function AdminFarmers() {
   const t = useT();
+  const navigate = useNavigate();
   const staffId = useAdminSession((s) => s.user?.id);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
@@ -52,6 +54,7 @@ export function AdminFarmers() {
           <Table
             rows={list.rows}
             rowKey={(r) => r.id}
+            onRowClick={(r) => navigate(`/admin/farmers/${r.id}`)}
             caption={t("admin.farmers")}
             columns={[
               {

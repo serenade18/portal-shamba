@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowDownRight, ArrowUpRight, CheckCircle2, Clock, Hourglass, MailPlus, RefreshCw, Sprout, Users, Wallet, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { Suspense, lazy, useState } from "react";
+import { useNavigate } from "react-router";
 import { ApiError, MOCK_MODE } from "@/api/client";
 import * as api from "@/api/endpoints";
 import type { AnalyticsDays, StaffAnalytics } from "@/api/types";
@@ -16,6 +17,7 @@ import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
 import { BarList, ColumnChart, LineChart, StatusBar } from "./AdminCharts";
 import { useCount, useCountryName } from "./geo";
+import { LandBanner } from "./LandBanner";
 
 // Leaflet and the map shapes load only when the dashboard shows the map.
 const FarmMap = lazy(() => import("./FarmMap"));
@@ -64,6 +66,7 @@ function DataTable({ rows, head }: { rows: [string, string][]; head: [string, st
 
 function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }) {
   const t = useT();
+  const navigate = useNavigate();
   const cur = data.currency;
   const tot = data.totals;
   const day = (iso: string) => formatDate(iso, t.locale, { year: false });
@@ -84,6 +87,9 @@ function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }
 
   return (
     <div className="dash-grid">
+      <div className="span-12">
+        <LandBanner land={tot.land} title={t("admin.land.title")} />
+      </div>
       <div className="span-12 kpi-grid">
         <Kpi icon={<Users size={18} />} label={t("admin.kpi.farmers")} value={whole(tot.farmers.total)}>
           <span className="small strong">{t("admin.kpi.farmersNew", { n: whole(tot.farmers.new) })}</span>
@@ -209,6 +215,7 @@ function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }
           <Table
             rows={data.recent_signups}
             rowKey={(r) => r.id}
+            onRowClick={(r) => navigate(`/admin/farmers/${r.id}`)}
             caption={t("admin.recent")}
             columns={[
               { key: "n", header: t("admin.col.farmer"), label: t("admin.col.farmer"), render: (r) => <span className="strong">{r.name || <span className="muted">{t("admin.noName")}</span>}</span> },
