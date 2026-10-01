@@ -48,11 +48,15 @@ export type Bounds = [[number, number], [number, number]];
 
 export interface MapHandle {
   viewer: Viewer;
-  /** The satellite and label layers, to hide while a choropleth is showing. */
-  imagery: ImageryLayer[];
+  /** The satellite and label layers. */
+  imagery: { satellite: ImageryLayer; labels: ImageryLayer };
 }
 
-export function createMap(el: HTMLElement, { tilt = true }: { tilt?: boolean } = {}): MapHandle {
+export function createMap(el: HTMLElement, { tilt = true, space = false }: {
+  tilt?: boolean;
+  /** A globe in space (stars, atmosphere) for the zoomed-out staff map; otherwise a plain backdrop. */
+  space?: boolean;
+} = {}): MapHandle {
   const viewer = new Viewer(el, {
     baseLayer: false,
     animation: false,
@@ -71,17 +75,25 @@ export function createMap(el: HTMLElement, { tilt = true }: { tilt?: boolean } =
   });
   const scene = viewer.scene;
   const credit = new Credit("Imagery © Esri, Maxar, Earthstar Geographics");
-  const imagery = [
-    viewer.imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({ url: SATELLITE, maximumLevel: 19, credit })),
-    viewer.imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({ url: LABELS, maximumLevel: 19 })),
-  ];
-  scene.globe.baseColor = color("var(--surface)");
-  scene.backgroundColor = color("var(--surface)");
-  if (scene.skyBox) scene.skyBox.show = false;
+  const imagery = {
+    satellite: viewer.imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({ url: SATELLITE, maximumLevel: 19, credit })),
+    labels: viewer.imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({ url: LABELS, maximumLevel: 19 })),
+  };
+  if (space) {
+    // Stars and a blue rim of atmosphere; no sun or moon, and no night side.
+    scene.backgroundColor = Color.BLACK;
+    scene.globe.baseColor = Color.fromCssColorString("#0b1d2a");
+    scene.globe.showGroundAtmosphere = true;
+    scene.globe.enableLighting = false;
+  } else {
+    scene.globe.baseColor = color("var(--surface)");
+    scene.backgroundColor = color("var(--surface)");
+    if (scene.skyBox) scene.skyBox.show = false;
+    if (scene.skyAtmosphere) scene.skyAtmosphere.show = false;
+    scene.fog.enabled = false;
+  }
   if (scene.sun) scene.sun.show = false;
   if (scene.moon) scene.moon.show = false;
-  if (scene.skyAtmosphere) scene.skyAtmosphere.show = false;
-  scene.fog.enabled = false;
   scene.screenSpaceCameraController.minimumZoomDistance = 40;
   scene.screenSpaceCameraController.maximumZoomDistance = 25_000_000;
   scene.screenSpaceCameraController.enableTilt = tilt;
@@ -147,4 +159,6 @@ export const HEIGHT = {
   farmArea: 1_500,
   /** A country (~ zoom 6). */
   country: 1_800_000,
+  /** The whole globe. */
+  world: 20_000_000,
 } as const;

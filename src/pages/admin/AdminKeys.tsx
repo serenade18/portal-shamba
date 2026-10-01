@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, RotateCcw } from "lucide-react";
-import { useState } from "react";
+import { Eye, EyeOff, KeyRound, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { ApiError } from "@/api/client";
 import * as api from "@/api/endpoints";
 import { useErrorText } from "@/api/hooks";
@@ -8,7 +8,7 @@ import type { KeyGroup, ManagedKey } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { PageHead, Panel, Table } from "@/components/ui/data";
 import { Chip, ErrorState, NoPermission, Notice, SkeletonRows } from "@/components/ui/feedback";
-import { FormError, SelectField, TextField } from "@/components/ui/forms";
+import { Field, FormError, SelectField, TextField } from "@/components/ui/forms";
 import { ConfirmDialog, SidePanel } from "@/components/ui/overlay";
 import { useT } from "@/i18n";
 import { formatDate } from "@/lib/format";
@@ -18,8 +18,9 @@ import { toast } from "@/stores/toast";
 /*
  * /admin/keys: the platform's integration keys (SMS, email, M-Pesa, SasaPay,
  * weather, maps). Super admins only. A key saved here overrides the server's
- * environment variable; "Use server setting" forgets it again. Secrets are
- * write-only: the server only ever sends their last few characters.
+ * environment variable; "Use server setting" forgets it again. The list only
+ * has the last few characters of secrets; the eye button asks for one full
+ * value at a time (audited on the server) and hides it again after a while.
  */
 
 const GROUPS: KeyGroup[] = ["sms", "email", "mpesa", "sasapay", "weather", "maps", "staff"];
@@ -62,7 +63,7 @@ export function AdminKeys() {
                       ),
                     },
                     { key: "s", header: t("admin.keys.col.source"), label: t("admin.keys.col.source"), render: (k) => <SourceChip k={k} /> },
-                    { key: "v", header: t("admin.col.value"), label: t("admin.col.value"), render: (k) => (k.preview ? <code className="admin-key-preview">{k.preview}</code> : <span className="muted">–</span>) },
+                    { key: "v", header: t("admin.col.value"), label: t("admin.col.value"), render: (k) => <KeyValue k={k} /> },
                     {
                       key: "u", header: t("admin.keys.col.updated"), label: t("admin.keys.col.updated"),
                       render: (k) => (k.updated_at ? <span className="small">{formatDate(k.updated_at, t.locale)}{k.updated_by && <><br /><span className="muted">{k.updated_by}</span></>}</span> : <span className="muted">–</span>),
@@ -88,6 +89,79 @@ export function AdminKeys() {
       {editing && <EditKey k={editing} onClose={() => setEditing(null)} />}
       {resetting && <ResetKey k={resetting} onClose={() => setResetting(null)} />}
     </>
+  );
+}
+
+/** How long a revealed key stays on screen. */
+const REVEAL_MS = 30_000;
+
+function KeyValue({ k }: { k: ManagedKey }) {
+  const t = useT();
+  const errorText = useErrorText();
+  const [shown, setShown] = useState<string | null>(null);
+  const reveal = useMutation({
+    mutationFn: () => api.staff.revealKey(k.name),
+    onSuccess: (r) => setShown(r.value),
+    onError: (e) => toast(errorText(e), "error"),
+  });
+  // Hide it again after a while, and whenever the key changes.
+  useEffect(() => {
+    if (shown === null) return;
+    const id = setTimeout(() => setShown(null), REVEAL_MS);
+    return () => clearTimeout(id);
+  }, [shown]);
+  useEffect(() => setShown(null), [k.preview, k.source]);
+
+  if (!k.preview) return <span className="muted">–</span>;
+  if (k.kind !== "secret") return <code className="admin-key-preview">{k.preview}</code>;
+  const label = t(`admin.keys.label.${k.name}`);
+  return (
+    <span className="admin-key-value">
+      <code className="admin-key-preview">{shown ?? k.preview}</code>
+      <Button
+        size="sm"
+        variant="quiet"
+        loading={reveal.isPending}
+        icon={shown === null ? <Eye size={16} aria-hidden /> : <EyeOff size={16} aria-hidden />}
+        onClick={() => (shown === null ? reveal.mutate() : setShown(null))}
+        aria-label={t(shown === null ? "admin.keys.show" : "admin.keys.hide", { key: label })}
+        title={t(shown === null ? "admin.keys.show" : "admin.keys.hide", { key: label })}
+      />
+    </span>
+  );
+}
+
+/** A password input with an eye button to show what's been typed. */
+function SecretField({ label, hint, value, onChange }: { label: string; hint?: string; value: string; onChange: (v: string) => void }) {
+  const t = useT();
+  const [visible, setVisible] = useState(false);
+  return (
+    <Field label={label} hint={hint}>
+      {(id, describedBy, invalid) => (
+        <span className="secret-input">
+          <input
+            id={id}
+            className="input"
+            type={visible ? "text" : "password"}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            aria-describedby={describedBy}
+            aria-invalid={invalid || undefined}
+            autoComplete="off"
+            spellCheck={false}
+            autoFocus
+          />
+          <Button
+            variant="quiet"
+            size="sm"
+            icon={visible ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+            onClick={() => setVisible((v) => !v)}
+            aria-label={t(visible ? "admin.keys.hideTyped" : "admin.keys.showTyped")}
+            aria-pressed={visible}
+          />
+        </span>
+      )}
+    </Field>
   );
 }
 
@@ -138,17 +212,10 @@ function EditKey({ k, onClose }: { k: ManagedKey; onClose: () => void }) {
         <p className="small muted"><code>{k.name}</code></p>
         {k.kind === "choice" ? (
           <SelectField label={label} hint={help} value={value} onChange={setValue} options={k.choices.map((c) => ({ value: c, label: c }))} />
+        ) : k.kind === "secret" ? (
+          <SecretField label={label} hint={k.preview ? t("admin.keys.secretHint", { preview: k.preview }) : help} value={value} onChange={setValue} />
         ) : (
-          <TextField
-            label={label}
-            hint={k.kind === "secret" && k.preview ? t("admin.keys.secretHint", { preview: k.preview }) : help}
-            value={value}
-            onChange={setValue}
-            type={k.kind === "secret" ? "password" : "text"}
-            autoComplete="off"
-            spellCheck={false}
-            autoFocus
-          />
+          <TextField label={label} hint={help} value={value} onChange={setValue} autoComplete="off" spellCheck={false} autoFocus />
         )}
         {k.kind === "secret" && help && <p className="small muted">{help}</p>}
         {k.name.endsWith("_ENV") && value === "production" && <Notice tone="amber">{t("admin.keys.productionWarning")}</Notice>}

@@ -10,7 +10,7 @@ import {
   type Cartesian2,
   type Entity,
 } from "cesium";
-import { ArrowLeft, ExternalLink, MapPin, MapPinOff } from "lucide-react";
+import { ArrowLeft, ExternalLink, Globe2, MapPin, MapPinOff } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "@/api/endpoints";
 import type { StaffAnalytics, StaffMapFarm } from "@/api/types";
@@ -21,12 +21,13 @@ import { useT } from "@/i18n";
 import { formatDate } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
-import { AFRICA, AFRICA_BOUNDS, EMPTY, bands, loadShapes, mainBounds, polygons, shade, useCount, useCountryName, type CountryShape, type Ring } from "./geo";
+import { AFRICA, AFRICA_BOUNDS, bands, loadShapes, mainBounds, polygons, shade, useCount, useCountryName, type CountryShape, type Ring } from "./geo";
 
 /*
- * The staff map: Africa shaded by farm accounts per country, on a Cesium
- * globe. Click a country to fly in and see its farms; click a farm to fly to
- * it over satellite imagery. Loaded lazily (Cesium is only needed here).
+ * The staff map: a satellite globe, opening on Africa, with every country
+ * that has farm accounts shaded by how many. Spin it or press "Whole world"
+ * to see the rest. Click a country to fly in and see its farms; click a farm
+ * to fly to it. Loaded lazily (Cesium is only needed here).
  */
 
 type Country = StaffAnalytics["countries"][number];
@@ -34,6 +35,8 @@ interface View {
   country: string | null;
   farmId: string | null;
 }
+/** Where the camera rests with no country chosen. */
+type Home = "africa" | "world";
 /** What an entity on the map stands for: what clicking it selects, and its tooltip. */
 interface Target {
   country?: string;
@@ -41,7 +44,7 @@ interface Target {
   tip: () => HTMLElement;
 }
 
-/** Below this camera height (a few hundred km across) the satellite imagery shows and countries turn into outlines. */
+/** Below this camera height (a few hundred km across) the shading gives way to outlines and place names show. */
 const DETAIL_HEIGHT = 500_000;
 /** The narrowest fitted views, in degrees: a farm (~450 m) and a country (~1,000 km). */
 const FARM_SPAN = 0.004;
@@ -49,6 +52,8 @@ const COUNTRY_SPAN = 4;
 const whole = (v: number) => v.toLocaleString("en");
 /** Countries whose main island is smaller than this (degrees across) also get a dot, or nobody could click them. */
 const TINY_DEGREES = 1;
+/** How strongly countries are shaded over the satellite imagery. */
+const FILL_ALPHA = 0.7;
 /** Ground layers, bottom to top: country fills, country edges, the selected country's edge, farm fills, farm edges. */
 const Z = { fill: 0, edge: 1, selected: 2, farm: 3, farmEdge: 4 };
 
@@ -78,6 +83,9 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
   const targets = useRef(new Map<Entity, Target>());
   const [shapes, setShapes] = useState<CountryShape[] | null>(null);
   const [view, setView] = useState<View>({ country: null, farmId: null });
+  // Where to rest with no country chosen; `n` makes pressing the same button again fly back there.
+  const [{ home, n: homeFlight }, setHomeView] = useState<{ home: Home; n: number }>({ home: "africa", n: 0 });
+  const goHome = (to: Home) => setHomeView((h) => ({ home: to, n: h.n + 1 }));
   const [detail, setDetail] = useState(false);
 
   const byCode = useMemo(() => new Map(rows.map((r) => [r.country, r])), [rows]);
@@ -99,7 +107,7 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
   // The map itself: created once.
   useEffect(() => {
     if (!el.current) return;
-    const handle = createMap(el.current);
+    const handle = createMap(el.current, { space: true });
     const { viewer } = handle;
     const scene = viewer.scene;
     viewer.camera.setView({ destination: rectangle(AFRICA_BOUNDS, 0) });
@@ -201,18 +209,21 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
   useEffect(() => {
     const handle = map.current;
     if (!handle) return;
-    for (const layer of handle.imagery) layer.show = detail;
+    // Place names only close in; from afar the shading and tooltips say which country is which.
+    handle.imagery.labels.show = detail;
     for (const [code, { fills, edges }] of countryEntities.current) {
       const selected = code === view.country;
+      const accounts = byCode.get(code)?.organisations ?? 0;
       for (const f of fills) {
         if (f.polygon) {
-          f.polygon.show = new ConstantProperty(!detail);
-          f.polygon.material = new ColorMaterialProperty(color(shade(byCode.get(code)?.organisations ?? 0, ranges)));
+          // Countries without farm accounts aren't shaded: the satellite imagery shows through.
+          f.polygon.show = new ConstantProperty(!detail && accounts > 0);
+          f.polygon.material = new ColorMaterialProperty(color(shade(accounts, ranges), FILL_ALPHA));
         }
       }
       for (const e of edges) {
-        e.polyline!.material = new ColorMaterialProperty(color(selected ? "var(--text)" : "var(--surface)", detail && !selected ? 0.6 : 1));
-        e.polyline!.width = new ConstantProperty(selected ? 2 : detail ? 1.5 : 1);
+        e.polyline!.material = new ColorMaterialProperty(color(selected ? "var(--lavender)" : "var(--surface)", selected ? 1 : detail ? 0.6 : 0.45));
+        e.polyline!.width = new ConstantProperty(selected ? 3 : detail ? 1.5 : 1);
         e.polyline!.zIndex = new ConstantProperty(selected ? Z.selected : Z.edge);
       }
     }
@@ -267,6 +278,12 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
     viewer.scene.requestRender();
   }, [farms, view.farmId]);
 
+  const farmBounds = useMemo(() => {
+    if (!view.country || shapeByCode.has(view.country)) return null;
+    const points = farms.flatMap((f) => (f.location ? [[f.location.lng, f.location.lat] as [number, number]] : []));
+    return points.length ? boundsOf(points) : null;
+  }, [view.country, shapeByCode, farms]);
+
   // Fly the camera when the selection changes.
   useEffect(() => {
     const camera = map.current?.viewer.camera;
@@ -276,12 +293,17 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
     } else if (farm?.location) {
       camera.flyTo({ destination: Cartesian3.fromDegrees(farm.location.lng, farm.location.lat, HEIGHT.farmArea), duration: 1.2 });
     } else if (view.country && !view.farmId) {
+      // Small countries have no shape at this scale: frame their farms instead.
       const s = shapeByCode.get(view.country);
-      if (s) camera.flyTo({ destination: rectangle(mainBounds(s), 0.05, COUNTRY_SPAN), duration: 0.8 });
+      const bounds = s ? mainBounds(s) : farmBounds;
+      if (bounds) camera.flyTo({ destination: rectangle(bounds, 0.05, COUNTRY_SPAN), duration: 0.8 });
     } else if (!view.country) {
-      camera.flyTo({ destination: rectangle(AFRICA_BOUNDS, 0), duration: 0.8 });
+      camera.flyTo({
+        destination: home === "africa" ? rectangle(AFRICA_BOUNDS, 0) : Cartesian3.fromDegrees(20, 10, HEIGHT.world),
+        duration: home === "africa" ? 0.8 : 1.5,
+      });
     }
-  }, [view.country, view.farmId, farm, shapeByCode]);
+  }, [view.country, view.farmId, farm, shapeByCode, home, homeFlight, farmBounds]);
 
   const selected = view.country ? byCode.get(view.country) : undefined;
   const located = farms.filter((f) => f.location).length;
@@ -292,9 +314,19 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
         <div ref={el} className="farm-map-globe" role="region" aria-label={t("admin.map.title")} />
         <div ref={tipEl} className="map-tip" role="tooltip" hidden />
         {!shapes && <div className="farm-map-loading" aria-busy="true" />}
+        {!view.country && (
+          <div className="map-home" role="group" aria-label={t("admin.map.view")}>
+            <Button size="sm" variant={home === "africa" ? "primary" : "secondary"} aria-pressed={home === "africa"} onClick={() => goHome("africa")}>
+              {t("admin.map.africa")}
+            </Button>
+            <Button size="sm" variant={home === "world" ? "primary" : "secondary"} aria-pressed={home === "world"} icon={<Globe2 size={16} aria-hidden />} onClick={() => goHome("world")}>
+              {t("admin.map.world")}
+            </Button>
+          </div>
+        )}
         {!detail && (
           <ul className="map-legend list-plain" aria-label={t("admin.map.legend")}>
-            <li><i style={{ background: EMPTY }} />{t("admin.map.none")}</li>
+            <li><i className="map-legend-none" />{t("admin.map.none")}</li>
             {ranges.map(([lo, hi]) => (
               <li key={lo}><i style={{ background: shade(lo, ranges) }} />{lo === hi ? lo : `${lo}–${hi}`}</li>
             ))}
@@ -307,22 +339,30 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
           <>
             <p className="farm-map-kicker">{t("admin.map.top")}</p>
             <p className="small muted">{t("admin.map.pickCountry")}</p>
-            <ul className="list-plain farm-map-list">
-              {rows.filter((r) => AFRICA.has(r.country)).map((r) => (
-                <li key={r.country}>
-                  <button type="button" onClick={() => setView({ country: r.country, farmId: null })}>
-                    <span className="map-swatch" style={{ background: shade(r.organisations, ranges) }} aria-hidden />
-                    <span className="grow">{countryName(r.country)}</span>
-                    <span className="num small muted">{count("accounts", r.organisations)} · {count("farms", r.farms)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {[
+              { heading: t("admin.map.africa"), list: rows.filter((r) => AFRICA.has(r.country)) },
+              { heading: t("admin.map.restOfWorld"), list: rows.filter((r) => !AFRICA.has(r.country)) },
+            ].map(({ heading, list }) => list.length > 0 && (
+              <section key={heading}>
+                <h4 className="farm-map-group">{heading}</h4>
+                <ul className="list-plain farm-map-list">
+                  {list.map((r) => (
+                    <li key={r.country}>
+                      <button type="button" onClick={() => setView({ country: r.country, farmId: null })}>
+                        <span className="map-swatch" style={{ background: shade(r.organisations, ranges) }} aria-hidden />
+                        <span className="grow">{countryName(r.country)}</span>
+                        <span className="num small muted">{count("accounts", r.organisations)} · {count("farms", r.farms)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
           </>
         ) : !farm ? (
           <>
             <Button variant="quiet" size="sm" className="flush" icon={<ArrowLeft size={16} aria-hidden />} onClick={() => setView({ country: null, farmId: null })}>
-              {t("admin.map.allAfrica")}
+              {t(home === "africa" ? "admin.map.allAfrica" : "admin.map.wholeWorld")}
             </Button>
             <h3 className="farm-map-title">{countryName(view.country)}</h3>
             <p className="small muted">

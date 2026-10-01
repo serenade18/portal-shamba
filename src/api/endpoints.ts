@@ -173,6 +173,8 @@ export const staff = {
   /** Integration keys. Super admins only; other staff get 403. */
   keys: () => http.get<{ keys: T.ManagedKey[] }>("/staff/keys", undefined, { as: "admin", org: false }),
   setKey: (name: T.KeyName, value: string) => http.put<T.ManagedKey>(`/staff/keys/${name}`, { value }, { as: "admin", org: false }),
+  /** A key's full value, for the eye button. Audited on the server. */
+  revealKey: (name: T.KeyName) => http.post<{ name: T.KeyName; value: string }>(`/staff/keys/${name}/reveal`, undefined, { as: "admin", org: false }),
   /** Forget the value saved here, so the server's environment applies again. */
   resetKey: (name: T.KeyName) => http.del<T.ManagedKey>(`/staff/keys/${name}`, { as: "admin", org: false }),
 };

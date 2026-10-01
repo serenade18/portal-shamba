@@ -1536,6 +1536,9 @@ const DEMO_COUNTRIES = [
   { country: "NG", organisations: 31, farmers: 42 },
   { country: "GH", organisations: 12, farmers: 17 },
   { country: "MU", organisations: 3, farmers: 4 },
+  // A few outside Africa, so the demo shows the rest of the world too.
+  { country: "IN", organisations: 6, farmers: 9 },
+  { country: "BR", organisations: 2, farmers: 3 },
 ];
 /** Demo farms for the staff map, placed near real farming towns. */
 const DEMO_TOWNS: Record<string, [string, string, number, number][]> = {
@@ -1546,6 +1549,8 @@ const DEMO_TOWNS: Record<string, [string, string, number, number][]> = {
   NG: [["Kaduna maize", "Kaduna", 10.52, 7.44], ["Oyo cassava", "Oyo", 7.85, 3.93]],
   GH: [["Kumasi cocoa", "Ashanti", 6.69, -1.62], ["Techiman yams", "Bono East", 7.58, -1.94]],
   MU: [["Moka sugar", "Moka", -20.23, 57.5]],
+  IN: [["Nashik grapes", "Maharashtra", 20.0, 73.79], ["Coorg coffee", "Karnataka", 12.42, 75.74]],
+  BR: [["Minas coffee", "Minas Gerais", -21.55, -45.43]],
 };
 
 function realDemoFarms(ctx: Ctx): T.StaffMapFarm[] {
@@ -1641,6 +1646,11 @@ route("PUT", "/staff/keys/:name", (ctx) => {
   if (choices && !choices.includes(value)) throw new MockError(400, "keys.invalid_choice", `Choose one of: ${choices.join(", ")}.`);
   mockSaved.set(name, { value, at: new Date().toISOString(), by: ctx.userId! });
   return keyRow(ctx, name);
+}, { org: false });
+
+route("POST", "/staff/keys/:name/reveal", (ctx) => {
+  const name = knownKey(ctx);
+  return { name, value: mockSaved.get(name)?.value ?? mockEnv[name] ?? "" };
 }, { org: false });
 
 route("DELETE", "/staff/keys/:name", (ctx) => {

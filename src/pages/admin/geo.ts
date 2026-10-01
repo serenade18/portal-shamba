@@ -2,9 +2,11 @@ import { useCallback, useMemo } from "react";
 import { useT } from "@/i18n";
 
 /*
- * Country shapes for the staff map. src/assets/geo/africa.json was cut from
- * Natural Earth 1:50m (via world-atlas) and keyed by ISO alpha-2; it loads on
- * demand so other pages don't pay for it.
+ * Country shapes for the staff map, keyed by ISO alpha-2, loaded on demand so
+ * other pages don't pay for them. Africa, where the map opens, is detailed
+ * (src/assets/geo/africa.json, Natural Earth 1:50m via world-atlas); the rest
+ * of the world is coarser (world.json, Natural Earth 1:110m admin 0, without
+ * Africa or Antarctica, coordinates rounded to 0.01°).
  */
 
 export type Ring = [number, number][]; // [lng, lat]
@@ -14,7 +16,7 @@ export interface CountryShape {
   geometry: { type: "Polygon"; coordinates: Ring[] } | { type: "MultiPolygon"; coordinates: Ring[][] };
 }
 
-/** Every code the map draws, so callers can list countries that fall outside it. */
+/** African country codes: the map opens on these, and lists them first. */
 export const AFRICA = new Set([
   "DZ", "AO", "BJ", "BW", "BF", "BI", "CV", "CM", "CF", "TD", "KM", "CG", "CD", "CI", "DJ", "EG", "GQ", "ER", "SZ",
   "ET", "GA", "GM", "GH", "GN", "GW", "KE", "LS", "LR", "LY", "MG", "MW", "ML", "MR", "MU", "MA", "MZ", "NA", "NE",
@@ -26,7 +28,9 @@ export const AFRICA_BOUNDS: [[number, number], [number, number]] = [[-35.5, -26]
 
 let shapes: Promise<CountryShape[]> | null = null;
 export const loadShapes = () =>
-  (shapes ??= import("@/assets/geo/africa.json").then((m) => (m.default as unknown as { features: CountryShape[] }).features));
+  (shapes ??= Promise.all([import("@/assets/geo/africa.json"), import("@/assets/geo/world.json")]).then((files) =>
+    files.flatMap((m) => (m.default as unknown as { features: CountryShape[] }).features),
+  ));
 
 export function polygons(s: CountryShape): Ring[][] {
   return s.geometry.type === "Polygon" ? [s.geometry.coordinates] : s.geometry.coordinates;

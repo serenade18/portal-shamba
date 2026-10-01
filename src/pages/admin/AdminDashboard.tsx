@@ -15,10 +15,10 @@ import { formatDate, formatMoney, formatTime, percentChange } from "@/lib/format
 import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
 import { BarList, ColumnChart, LineChart, StatusBar } from "./AdminCharts";
-import { AFRICA, useCount, useCountryName } from "./geo";
+import { useCount, useCountryName } from "./geo";
 
 // Leaflet and the map shapes load only when the dashboard shows the map.
-const AfricaMap = lazy(() => import("./AfricaMap"));
+const FarmMap = lazy(() => import("./FarmMap"));
 
 const compact = (v: number) => Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(v);
 const whole = (v: number) => v.toLocaleString("en");
@@ -74,7 +74,6 @@ function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }
   const countryName = useCountryName();
   const count = useCount();
   const accounts = data.countries.reduce((a, c) => a + c.organisations, 0);
-  const outside = data.countries.filter((c) => !AFRICA.has(c.country));
   const statusMeta = {
     succeeded: { color: "var(--health)", icon: <CheckCircle2 size={16} /> },
     failed: { color: "var(--terracotta)", icon: <XCircle size={16} /> },
@@ -151,13 +150,8 @@ function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }
             table={<DataTable head={[t("admin.col.country"), t("admin.kpi.accounts")]} rows={data.countries.map((c) => [countryName(c.country), whole(c.organisations)])} />}
           >
             <Suspense fallback={<Skeleton height={480} />}>
-              <AfricaMap rows={data.countries} />
+              <FarmMap rows={data.countries} />
             </Suspense>
-            {outside.length > 0 && (
-              <p className="small muted" style={{ marginTop: 8 }}>
-                {t("admin.map.outside", { list: outside.map((c) => `${countryName(c.country)} (${whole(c.organisations)})`).join(", ") })}
-              </p>
-            )}
           </ChartFrame>
         </Panel>
       </div>

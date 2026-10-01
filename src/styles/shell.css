@@ -1309,6 +1309,28 @@
   border-radius: var(--radius-control);
   background: rgb(255 255 255 / 0.92);
 }
+.farm-map-canvas .map-home {
+  position: absolute;
+  top: var(--s-3);
+  right: var(--s-3);
+  z-index: 500;
+  display: flex;
+  gap: var(--s-2);
+}
+.map-legend .map-legend-none {
+  border: 1px dashed var(--text-secondary);
+  background: transparent;
+}
+.farm-map-group {
+  margin: var(--s-3) 0 0;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.farm-map .farm-map-globe {
+  background: #000;
+}
+
 /* Hover tooltip over a Cesium map, moved by the map's code */
 .map-tip {
   position: absolute;
@@ -1436,6 +1458,25 @@
 .admin-key-preview {
   font-size: var(--fs-small);
   word-break: break-all;
+}
+.admin-key-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  max-width: 100%;
+}
+.secret-input {
+  position: relative;
+  display: block;
+}
+.secret-input .input {
+  padding-right: 44px;
+}
+.secret-input .btn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
 }
 .admin-key-actions {
   display: inline-flex;
