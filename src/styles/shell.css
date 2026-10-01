@@ -1269,7 +1269,7 @@
   margin: 0;
 }
 
-/* Staff dashboard: the farm map (Leaflet) with a side panel */
+/* Staff dashboard: the farm map (Cesium) with a side panel */
 .farm-map {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -1277,18 +1277,18 @@
 }
 .farm-map-canvas {
   position: relative;
-  /* Leaflet's panes use z-indexes up to 1000; keep them below the app's drawer and menus. */
+  /* Keep the map's own layers below the app's drawer and menus. */
   isolation: isolate;
   z-index: 0;
 }
-.farm-map-leaflet,
+.farm-map-globe,
 .farm-map-loading {
   height: 520px;
   border-radius: var(--radius-control);
   background: var(--surface);
 }
-.farm-map .farm-map-leaflet {
-  /* Beats Leaflet's own grey, which loads after this sheet. */
+.farm-map .farm-map-globe {
+  overflow: hidden;
   border: 1px solid var(--border);
   background: var(--surface);
   font: inherit;
@@ -1300,25 +1300,30 @@
 }
 .farm-map-canvas .map-legend {
   position: absolute;
+  /* Top, so it doesn't cover the imagery credits along the bottom. */
   left: var(--s-3);
-  bottom: var(--s-3);
+  top: var(--s-3);
   z-index: 500;
   margin: 0;
   padding: var(--s-2) var(--s-3);
   border-radius: var(--radius-control);
   background: rgb(255 255 255 / 0.92);
 }
-.leaflet-tooltip.leaflet-tip {
+/* Hover tooltip over a Cesium map, moved by the map's code */
+.map-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 600;
+  max-width: 240px;
+  pointer-events: none;
+  background: var(--surface);
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow-overlay);
   font: 13px/1.4 var(--font);
   color: var(--text);
-}
-/* Over satellite imagery the country labels only get in the way of the farms. */
-.farm-map-canvas.detail .country-tip {
-  display: none;
 }
 .farm-map-side {
   display: flex;
@@ -1398,7 +1403,7 @@
   }
 }
 @media (max-width: 767px) {
-  .farm-map-leaflet,
+  .farm-map-globe,
   .farm-map-loading {
     height: 380px;
   }
@@ -1425,16 +1430,17 @@
 /* Drawing a farm boundary on satellite imagery */
 .boundary-map {
   position: relative;
-  isolation: isolate; /* keep Leaflet's z-indexes under dialogs and the drawer */
+  isolation: isolate; /* keep the map's layers under dialogs and the drawer */
   z-index: 0;
 }
-.boundary-leaflet {
+.boundary-globe {
   height: 360px;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   cursor: crosshair;
 }
-.boundary-map .leaflet-container {
+.boundary-map .cesium-viewer {
   font: inherit;
 }
 .boundary-crosshair {
@@ -1451,23 +1457,13 @@
     linear-gradient(#fff, #fff) center / 100% 2px no-repeat;
   filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.9));
 }
-.corner-handle {
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: var(--green-600);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5);
-  cursor: grab;
-}
-.corner-handle.first {
-  background: var(--lavender);
-}
 .boundary-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
 }
 @media (max-width: 767px) {
-  .boundary-leaflet {
+  .boundary-globe {
     height: 300px;
   }
 }

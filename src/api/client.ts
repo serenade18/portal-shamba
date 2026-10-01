@@ -18,7 +18,19 @@ const IMPLEMENTED = [
   /^\/members(\/[^/]+)?$/,
   /^\/invitations(\/[^/]+)?$/,
   /^\/payments\/requests(\/[^/]+)?(\/otp)?$/,
-  /^\/farms(\/[0-9a-f-]{36})?$/, // farms list, create and update; onboarding (/farms/{id}/types) is still mocked
+  /^\/farms(\/[0-9a-f-]{36})?(\/types)?$/, // farms, and changing what a farm keeps
+  /^\/catalogue$/,
+  /^\/onboarding$/,
+  /^\/navigation$/,
+  /^\/weather$/,
+  /^\/alerts(\/[0-9a-f-]{36}\/seen)?$/,
+  /^\/dashboard$/, // money and stock figures are 0 until those modules exist
+  /^\/items(\/[0-9a-f-]{36})?$/,
+  /^\/enterprises(\/[0-9a-f-]{36}(\/(records|health|production|close-summary|close))?)?$/,
+  /^\/animals(\/[0-9a-f-]{36}\/exit)?$/,
+  /^\/(milk-records|feeding-records|treatments)$/,
+  /^\/batches(\/[0-9a-f-]{36}\/days)?$/,
+  /^\/seasons(\/[0-9a-f-]{36}\/(activities|harvests))?$/,
   /^\/staff\//, // staff analytics (the admin area)
 ];
 

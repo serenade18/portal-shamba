@@ -33,7 +33,7 @@ export function WeatherPage() {
     <>
       <PageHead
         title={t("weather.title")}
-        sub={w && `${farm?.name}, ${farm?.county}. ${t("weather.updated", { time: `${formatDate(w.fetched_at, t.locale, { year: false })} ${formatTime(w.fetched_at, t.locale)}` })}`}
+        sub={w && `${[farm?.name, farm?.county].filter(Boolean).join(", ")}. ${t("weather.updated", { time: `${formatDate(w.fetched_at, t.locale, { year: false })} ${formatTime(w.fetched_at, t.locale)}` })}`}
       />
       {q.isLoading ? (
         <div className="stack-lg"><Skeleton height={180} /><Skeleton height={300} /></div>
@@ -41,9 +41,9 @@ export function WeatherPage() {
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <div className="stack-lg">
-          <WeatherStrip days={w.forecast} title={t("weather.forecast")} />
-          <Panel title={t("weather.forecast")} bodyless>
-            <div style={{ padding: "12px 20px 0" }}><p className="muted">{t("weather.forecastSummary", { total: forecastTotal })}</p></div>
+          <WeatherStrip days={w.forecast} title={t("weather.forecast", { n: w.forecast.length })} />
+          <Panel title={t("weather.forecast", { n: w.forecast.length })} bodyless>
+            <div style={{ padding: "12px 20px 0" }}><p className="muted">{t("weather.forecastSummary", { total: forecastTotal, n: w.forecast.length })}</p></div>
             <div style={{ padding: 16 }}>
               <Table
                 rows={w.forecast}

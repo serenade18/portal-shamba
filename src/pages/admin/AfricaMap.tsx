@@ -1,23 +1,32 @@
-import "leaflet/dist/leaflet.css";
 import { useQuery } from "@tanstack/react-query";
-import L from "leaflet";
+import {
+  Cartesian3,
+  ColorMaterialProperty,
+  ConstantProperty,
+  HeightReference,
+  PolygonHierarchy,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
+  type Cartesian2,
+  type Entity,
+} from "cesium";
 import { ArrowLeft, ExternalLink, MapPin, MapPinOff } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "@/api/endpoints";
 import type { StaffAnalytics, StaffMapFarm } from "@/api/types";
+import { altitude, boundsOf, color, createMap, HEIGHT, rectangle, type MapHandle } from "@/components/map/cesium";
 import { Button } from "@/components/ui/Button";
-import { token } from "@/components/ui/charts";
 import { Chip, ErrorState, SkeletonRows } from "@/components/ui/feedback";
 import { useT } from "@/i18n";
 import { formatDate } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
-import { AFRICA, AFRICA_BOUNDS, EMPTY, bands, loadShapes, mainBounds, shade, useCount, useCountryName, type CountryShape } from "./geo";
+import { AFRICA, AFRICA_BOUNDS, EMPTY, bands, loadShapes, mainBounds, polygons, shade, useCount, useCountryName, type CountryShape, type Ring } from "./geo";
 
 /*
- * The staff map: Africa shaded by farm accounts per country. Click a country
- * to zoom in and see its farms; click a farm to zoom to it over satellite
- * imagery. Loaded lazily (Leaflet is only needed here).
+ * The staff map: Africa shaded by farm accounts per country, on a Cesium
+ * globe. Click a country to fly in and see its farms; click a farm to fly to
+ * it over satellite imagery. Loaded lazily (Cesium is only needed here).
  */
 
 type Country = StaffAnalytics["countries"][number];
@@ -25,15 +34,27 @@ interface View {
   country: string | null;
   farmId: string | null;
 }
+/** What an entity on the map stands for: what clicking it selects, and its tooltip. */
+interface Target {
+  country?: string;
+  farmId?: string;
+  tip: () => HTMLElement;
+}
 
-/** From this zoom the satellite imagery shows and countries turn into outlines. */
-const DETAIL_ZOOM = 8;
-const FARM_ZOOM = 16;
+/** Below this camera height (a few hundred km across) the satellite imagery shows and countries turn into outlines. */
+const DETAIL_HEIGHT = 500_000;
+/** The narrowest fitted views, in degrees: a farm (~450 m) and a country (~1,000 km). */
+const FARM_SPAN = 0.004;
+const COUNTRY_SPAN = 4;
 const whole = (v: number) => v.toLocaleString("en");
 /** Countries whose main island is smaller than this (degrees across) also get a dot, or nobody could click them. */
 const TINY_DEGREES = 1;
+/** Ground layers, bottom to top: country fills, country edges, the selected country's edge, farm fills, farm edges. */
+const Z = { fill: 0, edge: 1, selected: 2, farm: 3, farmEdge: 4 };
 
-/** Leaflet tooltips take HTML; build them from text so farm names can't inject markup. */
+const positions = (ring: Ring) => ring.map(([lng, lat]) => Cartesian3.fromDegrees(lng, lat));
+
+/** Tooltips are built from text so farm names can't inject markup. */
 function tip(title: string, line?: string): HTMLElement {
   const el = document.createElement("span");
   const b = document.createElement("strong");
@@ -49,12 +70,15 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
   const count = useCount();
   const staffId = useAdminSession((s) => s.user?.id);
   const el = useRef<HTMLDivElement>(null);
-  const map = useRef<L.Map | null>(null);
-  const countryLayer = useRef<L.GeoJSON | null>(null);
-  const farmLayer = useRef<L.LayerGroup | null>(null);
+  const tipEl = useRef<HTMLDivElement>(null);
+  const map = useRef<MapHandle | null>(null);
+  // Entities by country code: fills (hidden over satellite), edges, and a dot for tiny islands.
+  const countryEntities = useRef(new Map<string, { fills: Entity[]; edges: Entity[] }>());
+  const farmEntities = useRef<Entity[]>([]);
+  const targets = useRef(new Map<Entity, Target>());
   const [shapes, setShapes] = useState<CountryShape[] | null>(null);
   const [view, setView] = useState<View>({ country: null, farmId: null });
-  const [zoom, setZoom] = useState(0);
+  const [detail, setDetail] = useState(false);
 
   const byCode = useMemo(() => new Map(rows.map((r) => [r.country, r])), [rows]);
   const ranges = useMemo(() => bands(Math.max(0, ...rows.map((r) => r.organisations))), [rows]);
@@ -75,142 +99,187 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
   // The map itself: created once.
   useEffect(() => {
     if (!el.current) return;
-    const m = L.map(el.current, { zoomSnap: 0.25, minZoom: 2, maxZoom: 18 });
-    m.fitBounds(AFRICA_BOUNDS);
-    // Satellite imagery and place names, only once zoomed in close enough to see farms.
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      minZoom: DETAIL_ZOOM,
-      maxZoom: 19,
-      attribution: "Imagery © Esri, Maxar, Earthstar Geographics",
-    }).addTo(m);
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
-      minZoom: DETAIL_ZOOM,
-      maxZoom: 19,
-    }).addTo(m);
-    // Farms get their own pane above the countries, so a highlighted country never covers them.
-    m.createPane("farms").style.zIndex = "450";
-    farmLayer.current = L.layerGroup().addTo(m);
-    const onZoom = () => setZoom(m.getZoom());
-    m.on("zoomend", onZoom);
-    onZoom();
-    map.current = m;
-    const resize = new ResizeObserver(() => m.invalidateSize());
-    resize.observe(el.current);
+    const handle = createMap(el.current);
+    const { viewer } = handle;
+    const scene = viewer.scene;
+    viewer.camera.setView({ destination: rectangle(AFRICA_BOUNDS, 0) });
+    viewer.camera.percentageChanged = 0.05;
+    const onMove = () => setDetail(altitude(viewer) < DETAIL_HEIGHT);
+    const stopWatching = viewer.camera.changed.addEventListener(onMove);
+    onMove();
+
+    const targetAt = (pos: Cartesian2) => {
+      const picked = scene.pick(pos) as { id?: Entity } | undefined;
+      return picked?.id ? targets.current.get(picked.id) : undefined;
+    };
+    const input = new ScreenSpaceEventHandler(scene.canvas);
+    input.setInputAction((e: { endPosition: Cartesian2 }) => {
+      const box = tipEl.current;
+      const target = targetAt(e.endPosition);
+      // Over satellite imagery the country labels only get in the way of the farms.
+      const show = target && !(target.country && altitude(viewer) < DETAIL_HEIGHT);
+      scene.canvas.style.cursor = target ? "pointer" : "";
+      if (!box) return;
+      box.hidden = !show;
+      if (!show) return;
+      box.replaceChildren(target.tip());
+      box.style.transform = `translate(${e.endPosition.x + 14}px, ${e.endPosition.y + 14}px)`;
+    }, ScreenSpaceEventType.MOUSE_MOVE);
+    input.setInputAction((e: { position: Cartesian2 }) => {
+      const target = targetAt(e.position);
+      if (target?.farmId) setView((v) => ({ country: v.country, farmId: target.farmId! }));
+      // Zoomed in over satellite, a click is for farms, not for choosing a country again.
+      else if (target?.country && altitude(viewer) >= DETAIL_HEIGHT) setView({ country: target.country, farmId: null });
+    }, ScreenSpaceEventType.LEFT_CLICK);
+
+    map.current = handle;
     let live = true;
     loadShapes().then((s) => live && setShapes(s));
     return () => {
       live = false;
-      resize.disconnect();
-      m.remove();
+      stopWatching();
+      input.destroy();
+      viewer.destroy();
       map.current = null;
-      countryLayer.current = null;
-      farmLayer.current = null;
+      countryEntities.current.clear();
+      farmEntities.current = [];
+      targets.current.clear();
     };
   }, []);
 
   // Countries, shaded by farm accounts. Rebuilt when the numbers or language change.
   useEffect(() => {
-    const m = map.current;
-    if (!m || !shapes) return;
-    countryLayer.current?.remove();
-    const layer = L.geoJSON(shapes as unknown as GeoJSON.FeatureCollection, {
-      onEachFeature: (f, lyr) => {
-        const code = (f as unknown as CountryShape).properties.code;
-        const r = byCode.get(code);
-        lyr.bindTooltip(
-          () => tip(countryName(code), r ? `${count("accounts", r.organisations)}, ${count("farmers", r.farmers)}` : t("admin.map.none")),
-          { sticky: true, className: "leaflet-tip country-tip" },
-        );
-        // Zoomed in over satellite, a click is for farms, not for choosing a country again.
-        lyr.on("click", () => m.getZoom() < DETAIL_ZOOM && setView({ country: code, farmId: null }));
-      },
-    }).addTo(m);
-    layer.bringToBack();
-    // Island states with farm accounts get a dot too; Mauritius is a few pixels across at this scale.
-    for (const s of shapes) {
-      const r = byCode.get(s.properties.code);
-      const [[south, west], [north, east]] = mainBounds(s);
-      if (!r || Math.max(north - south, east - west) >= TINY_DEGREES) continue;
-      const dot = L.circleMarker([(south + north) / 2, (west + east) / 2], {
-        radius: 6, weight: 2, color: token("var(--surface)"), fillColor: token(shade(r.organisations, ranges)), fillOpacity: 1,
-      });
-      dot.bindTooltip(() => tip(countryName(s.properties.code), `${count("accounts", r.organisations)}, ${count("farmers", r.farmers)}`), { sticky: true, className: "leaflet-tip country-tip" });
-      dot.on("click", () => m.getZoom() < DETAIL_ZOOM && setView({ country: s.properties.code, farmId: null }));
-      layer.addLayer(dot);
+    const viewer = map.current?.viewer;
+    if (!viewer || !shapes) return;
+    for (const { fills, edges } of countryEntities.current.values()) {
+      for (const e of [...fills, ...edges]) {
+        viewer.entities.remove(e);
+        targets.current.delete(e);
+      }
     }
-    countryLayer.current = layer;
+    countryEntities.current.clear();
+    for (const s of shapes) {
+      const code = s.properties.code;
+      const r = byCode.get(code);
+      const target: Target = {
+        country: code,
+        tip: () => tip(countryName(code), r ? `${count("accounts", r.organisations)}, ${count("farmers", r.farmers)}` : t("admin.map.none")),
+      };
+      const fills: Entity[] = [];
+      const edges: Entity[] = [];
+      for (const [outer, ...holes] of polygons(s)) {
+        fills.push(viewer.entities.add({
+          polygon: {
+            hierarchy: new PolygonHierarchy(positions(outer!), holes.map((h) => new PolygonHierarchy(positions(h)))),
+            zIndex: Z.fill,
+          },
+        }));
+        edges.push(viewer.entities.add({ polyline: { positions: positions(outer!), clampToGround: true, zIndex: Z.edge } }));
+      }
+      // Island states with farm accounts get a dot too; Mauritius is a few pixels across at this scale.
+      const [[south, west], [north, east]] = mainBounds(s);
+      if (r && Math.max(north - south, east - west) < TINY_DEGREES) {
+        fills.push(viewer.entities.add({
+          position: Cartesian3.fromDegrees((west + east) / 2, (south + north) / 2),
+          point: {
+            pixelSize: 12,
+            color: color(shade(r.organisations, ranges)),
+            outlineColor: color("var(--surface)"),
+            outlineWidth: 2,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        }));
+      }
+      for (const e of [...fills, ...edges]) targets.current.set(e, target);
+      countryEntities.current.set(code, { fills, edges });
+    }
+    viewer.scene.requestRender();
   }, [shapes, byCode, countryName, count, ranges, t]);
 
-  // Country styles follow the zoom (outlines over satellite) and the selection.
+  // Country styles follow the camera (outlines over satellite) and the selection.
   useEffect(() => {
-    const layer = countryLayer.current;
-    if (!layer) return;
-    const detail = zoom >= DETAIL_ZOOM;
-    layer.setStyle((f) => {
-      const code = (f as unknown as CountryShape | undefined)?.properties.code ?? "";
+    const handle = map.current;
+    if (!handle) return;
+    for (const layer of handle.imagery) layer.show = detail;
+    for (const [code, { fills, edges }] of countryEntities.current) {
       const selected = code === view.country;
-      return {
-        fillColor: token(shade(byCode.get(code)?.organisations ?? 0, ranges)),
-        fillOpacity: detail ? 0 : 1,
-        color: token(selected ? "var(--text)" : "var(--surface)"),
-        weight: selected ? 2 : detail ? 1.5 : 0.8,
-        opacity: detail && !selected ? 0.6 : 1,
-      };
-    });
-    layer.eachLayer((l) => {
-      if ((l as L.Path & { feature?: CountryShape }).feature?.properties.code === view.country) (l as L.Path).bringToFront();
-    });
-  }, [zoom, view.country, byCode, ranges, shapes]);
+      for (const f of fills) {
+        if (f.polygon) {
+          f.polygon.show = new ConstantProperty(!detail);
+          f.polygon.material = new ColorMaterialProperty(color(shade(byCode.get(code)?.organisations ?? 0, ranges)));
+        }
+      }
+      for (const e of edges) {
+        e.polyline!.material = new ColorMaterialProperty(color(selected ? "var(--text)" : "var(--surface)", detail && !selected ? 0.6 : 1));
+        e.polyline!.width = new ConstantProperty(selected ? 2 : detail ? 1.5 : 1);
+        e.polyline!.zIndex = new ConstantProperty(selected ? Z.selected : Z.edge);
+      }
+    }
+    handle.viewer.scene.requestRender();
+  }, [detail, view.country, byCode, ranges, shapes]);
 
   // Farm dots for the chosen country.
   useEffect(() => {
-    const group = farmLayer.current;
-    if (!group) return;
-    group.clearLayers();
+    const viewer = map.current?.viewer;
+    if (!viewer) return;
+    for (const e of farmEntities.current) {
+      viewer.entities.remove(e);
+      targets.current.delete(e);
+    }
+    farmEntities.current = [];
     for (const f of farms) {
       if (!f.location) continue;
       const selected = f.id === view.farmId;
+      const sub = [f.county, f.organisation.name !== f.name ? f.organisation.name : ""].filter(Boolean).join(" · ");
+      const target: Target = { farmId: f.id, tip: () => tip(f.name, sub) };
+      const added: Entity[] = [];
       // The farmer's drawn boundary, visible once zoomed in far enough to matter.
       if (f.boundary) {
-        const edge = L.polygon(f.boundary.coordinates[0]!.map(([lng, lat]) => [lat, lng] as L.LatLngTuple), {
-          pane: "farms",
-          color: token(selected ? "var(--lavender)" : "var(--surface)"),
-          weight: selected ? 3 : 2,
-          fillOpacity: selected ? 0.15 : 0.05,
-          fillColor: token("var(--lavender)"),
-        });
-        edge.on("click", () => setView((v) => ({ country: v.country, farmId: f.id })));
-        group.addLayer(edge);
+        const ring = f.boundary.coordinates[0]!;
+        added.push(viewer.entities.add({
+          polygon: { hierarchy: new PolygonHierarchy(positions(ring)), material: color("var(--lavender)", selected ? 0.15 : 0.05), zIndex: Z.farm },
+        }));
+        added.push(viewer.entities.add({
+          polyline: {
+            positions: positions([...ring, ring[0]!]),
+            clampToGround: true,
+            width: selected ? 3 : 2,
+            material: color(selected ? "var(--lavender)" : "var(--surface)"),
+            zIndex: Z.farmEdge,
+          },
+        }));
       }
-      const dot = L.circleMarker([f.location.lat, f.location.lng], {
-        pane: "farms",
-        radius: selected ? 10 : 7,
-        color: token("var(--text)"),
-        weight: 2,
-        fillColor: token(selected ? "var(--lavender)" : "var(--surface)"),
-        fillOpacity: 1,
-      });
-      const sub = [f.county, f.organisation.name !== f.name ? f.organisation.name : ""].filter(Boolean).join(" · ");
-      dot.bindTooltip(() => tip(f.name, sub), { className: "leaflet-tip", direction: "top", offset: [0, -8] });
-      dot.on("click", () => setView((v) => ({ country: v.country, farmId: f.id })));
-      group.addLayer(dot);
+      added.push(viewer.entities.add({
+        position: Cartesian3.fromDegrees(f.location.lng, f.location.lat),
+        point: {
+          pixelSize: selected ? 20 : 14,
+          color: color(selected ? "var(--lavender)" : "var(--surface)"),
+          outlineColor: color("var(--text)"),
+          outlineWidth: 2,
+          heightReference: HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      }));
+      for (const e of added) targets.current.set(e, target);
+      farmEntities.current.push(...added);
     }
+    viewer.scene.requestRender();
   }, [farms, view.farmId]);
 
-  // Move the camera when the selection changes.
+  // Fly the camera when the selection changes.
   useEffect(() => {
-    const m = map.current;
-    if (!m) return;
+    const camera = map.current?.viewer.camera;
+    if (!camera) return;
     if (farm?.boundary) {
-      const edge = farm.boundary.coordinates[0]!.map(([lng, lat]) => [lat, lng] as L.LatLngTuple);
-      m.flyToBounds(edge, { padding: [48, 48], maxZoom: 18, duration: 1.2 });
+      camera.flyTo({ destination: rectangle(boundsOf(farm.boundary.coordinates[0]!), 0.15, FARM_SPAN), duration: 1.2 });
     } else if (farm?.location) {
-      m.flyTo([farm.location.lat, farm.location.lng], FARM_ZOOM, { duration: 1.2 });
+      camera.flyTo({ destination: Cartesian3.fromDegrees(farm.location.lng, farm.location.lat, HEIGHT.farmArea), duration: 1.2 });
     } else if (view.country && !view.farmId) {
       const s = shapeByCode.get(view.country);
-      if (s) m.flyToBounds(mainBounds(s), { padding: [24, 24], maxZoom: 7, duration: 0.8 });
+      if (s) camera.flyTo({ destination: rectangle(mainBounds(s), 0.05, COUNTRY_SPAN), duration: 0.8 });
     } else if (!view.country) {
-      m.flyToBounds(AFRICA_BOUNDS, { duration: 0.8 });
+      camera.flyTo({ destination: rectangle(AFRICA_BOUNDS, 0), duration: 0.8 });
     }
   }, [view.country, view.farmId, farm, shapeByCode]);
 
@@ -219,10 +288,11 @@ export default function AfricaMap({ rows }: { rows: Country[] }) {
 
   return (
     <div className="farm-map">
-      <div className={zoom >= DETAIL_ZOOM ? "farm-map-canvas detail" : "farm-map-canvas"}>
-        <div ref={el} className="farm-map-leaflet" role="region" aria-label={t("admin.map.title")} />
+      <div className="farm-map-canvas">
+        <div ref={el} className="farm-map-globe" role="region" aria-label={t("admin.map.title")} />
+        <div ref={tipEl} className="map-tip" role="tooltip" hidden />
         {!shapes && <div className="farm-map-loading" aria-busy="true" />}
-        {zoom < DETAIL_ZOOM && (
+        {!detail && (
           <ul className="map-legend list-plain" aria-label={t("admin.map.legend")}>
             <li><i style={{ background: EMPTY }} />{t("admin.map.none")}</li>
             {ranges.map(([lo, hi]) => (

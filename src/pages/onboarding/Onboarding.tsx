@@ -7,7 +7,7 @@ import { useCatalogue, useErrorText, useFarm, useKey, useNavigation } from "@/ap
 import type { EnterpriseType, TypeCode } from "@/api/types";
 import { useSignOut } from "@/components/shell/TopBar";
 import { Button } from "@/components/ui/Button";
-import { Notice, Skeleton } from "@/components/ui/feedback";
+import { ErrorState, Notice, Skeleton } from "@/components/ui/feedback";
 import { Field, FormError } from "@/components/ui/forms";
 import { useT, type MsgKey } from "@/i18n";
 import { useMembership } from "@/stores/session";
@@ -77,6 +77,9 @@ export function Onboarding() {
             </div>
             {catalogue.isLoading ? (
               <Skeleton height={400} />
+            ) : catalogue.error ? (
+              // Without the catalogue there is nothing to choose; say so rather than show empty sections.
+              <ErrorState error={catalogue.error} onRetry={() => catalogue.refetch()} />
             ) : (
               <TypeTiles types={types} value={picks} onChange={setPicks} />
             )}

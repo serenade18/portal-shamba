@@ -1,9 +1,20 @@
 import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { viteStaticCopy } from "vite-plugin-static-copy";
+
+// Cesium loads its web workers, widget styles and built-in assets at runtime from /cesium
+// (window.CESIUM_BASE_URL, set in src/components/map/cesium.ts).
+const CESIUM = "node_modules/cesium/Build/Cesium";
+const CESIUM_BASE = "cesium";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    viteStaticCopy({
+      targets: ["Workers", "ThirdParty", "Assets", "Widgets"].map((dir) => ({ src: `${CESIUM}/${dir}`, dest: CESIUM_BASE, rename: { stripBase: 4 } })),
+    }),
+  ],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: {
     port: 3000,
