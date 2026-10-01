@@ -13,20 +13,32 @@ import {
   UrlTemplateImageryProvider,
   Viewer,
 } from "cesium";
+import * as api from "@/api/endpoints";
 import { token } from "@/components/ui/charts";
 
 /*
  * Shared Cesium setup for the portal's maps: a bare globe (no Cesium widgets)
  * over Esri satellite imagery with place names, so no Cesium ion account is
- * needed. Set VITE_CESIUM_ION_TOKEN to add Cesium World Terrain (3D hills).
+ * needed. With a Cesium ion token (set by super admins at /admin/keys, served
+ * by GET /config/public) the globe also gets Cesium World Terrain (3D hills).
  * Only imported from lazily loaded map screens; Cesium is large.
  */
 
 // Copied there by vite-plugin-static-copy (vite.config.ts). Read lazily by Cesium, so setting it here is early enough.
 (window as unknown as { CESIUM_BASE_URL: string }).CESIUM_BASE_URL = `${import.meta.env.BASE_URL}cesium/`;
 
-const ION_TOKEN = import.meta.env.VITE_CESIUM_ION_TOKEN as string | undefined;
-if (ION_TOKEN) Ion.defaultAccessToken = ION_TOKEN;
+/** The Cesium ion token, asked for once per page load ("" when none is set). */
+let ionToken: Promise<string> | null = null;
+function loadIonToken(): Promise<string> {
+  ionToken ??= api.config.public().then(
+    (c) => c.cesium_ion_token,
+    () => {
+      ionToken = null; // try again next time a map opens
+      return "";
+    },
+  );
+  return ionToken;
+}
 
 const SATELLITE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const LABELS = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
@@ -75,15 +87,16 @@ export function createMap(el: HTMLElement, { tilt = true }: { tilt?: boolean } =
   scene.screenSpaceCameraController.enableTilt = tilt;
   // Double-click would otherwise "track" an entity and lock the camera to it.
   viewer.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-  if (ION_TOKEN) {
-    createWorldTerrainAsync()
-      .then((terrain) => {
-        if (!viewer.isDestroyed()) viewer.terrainProvider = terrain;
-      })
-      .catch(() => {
-        /* no terrain: the flat globe still works */
-      });
-  }
+  loadIonToken()
+    .then(async (ion) => {
+      if (!ion || viewer.isDestroyed()) return;
+      Ion.defaultAccessToken = ion;
+      const terrain = await createWorldTerrainAsync();
+      if (!viewer.isDestroyed()) viewer.terrainProvider = terrain;
+    })
+    .catch(() => {
+      /* no terrain: the flat globe still works */
+    });
   return { viewer, imagery };
 }
 

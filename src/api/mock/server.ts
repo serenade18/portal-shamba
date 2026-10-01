@@ -1594,6 +1594,63 @@ route("GET", "/staff/farmers", (ctx) => {
   return paginate(rows, ctx.q, 50);
 }, { org: false });
 
+/* Integration keys: an in-memory copy of the backend's registry (apps/keys/registry.py). Not saved across reloads. */
+const MOCK_KEYS: [T.KeyName, T.KeyGroup, string, T.ManagedKey["kind"], string[]?][] = [
+  ["SMS_API_KEY", "sms", "API key", "secret"], ["SMS_CLIENT_ID", "sms", "Client ID", "text"], ["SMS_ACCESS_KEY", "sms", "Access key", "secret"],
+  ["SMS_SENDER_ID", "sms", "Sender ID", "text"], ["RESEND_API_KEY", "email", "Resend API key", "secret"],
+  ["MPESA_ENV", "mpesa", "Environment", "choice", ["sandbox", "production"]], ["MPESA_CONSUMER_KEY", "mpesa", "Consumer key", "secret"],
+  ["MPESA_CONSUMER_SECRET", "mpesa", "Consumer secret", "secret"], ["MPESA_SHORTCODE", "mpesa", "Shortcode", "text"],
+  ["MPESA_PASSKEY", "mpesa", "Passkey", "secret"], ["MPESA_CALLBACK_URL", "mpesa", "Callback URL", "text"],
+  ["SASAPAY_ENV", "sasapay", "Environment", "choice", ["sandbox", "production"]], ["SASAPAY_CLIENT_ID", "sasapay", "Client ID", "text"],
+  ["SASAPAY_CLIENT_SECRET", "sasapay", "Client secret", "secret"], ["SASAPAY_MERCHANT_CODE", "sasapay", "Merchant code", "text"],
+  ["OPENWEATHER_API_KEY", "weather", "OpenWeather API key", "secret"], ["AGRO_MONITORING_API_KEY", "weather", "Agro Monitoring API key", "secret"],
+  ["CESIUM_ION_TOKEN", "maps", "Cesium ion token", "secret"], ["STAFF_SIGNUP_KEY", "staff", "Staff sign-up key", "secret"],
+];
+const mockEnv: Partial<Record<T.KeyName, string>> = { MPESA_ENV: "sandbox", SASAPAY_ENV: "sandbox", STAFF_SIGNUP_KEY: "shamba-staff-key" };
+const mockSaved = new Map<T.KeyName, { value: string; at: string; by: string }>();
+
+function keyRow(ctx: Ctx, name: T.KeyName): T.ManagedKey {
+  const [, group, label, kind, choices = []] = MOCK_KEYS.find(([n]) => n === name)!;
+  const saved = mockSaved.get(name);
+  const value = saved?.value ?? mockEnv[name] ?? "";
+  return {
+    name, group, label, kind, choices, help: "", public: name === "CESIUM_ION_TOKEN",
+    source: saved ? "admin" : value ? "environment" : "unset", has_environment_value: !!mockEnv[name],
+    preview: !value ? "" : kind !== "secret" ? value : value.length >= 12 ? `••••••••${value.slice(-4)}` : "••••••••",
+    updated_at: saved?.at ?? null, updated_by: saved ? ctx.db.users.find((u) => u.id === saved.by)?.name ?? null : null,
+  };
+}
+
+function knownKey(ctx: Ctx): T.KeyName {
+  if (!ctx.db.staff.includes(ctx.userId ?? "")) throw new MockError(403, "permission_denied", "You do not have permission to do this.");
+  const name = ctx.params.name as T.KeyName;
+  if (!MOCK_KEYS.some(([n]) => n === name)) throw new MockError(404, "keys.unknown", "There is no key with that name.");
+  return name;
+}
+
+route("GET", "/staff/keys", (ctx) => {
+  if (!ctx.db.staff.includes(ctx.userId ?? "")) throw new MockError(403, "permission_denied", "You do not have permission to do this.");
+  return { keys: MOCK_KEYS.map(([n]) => keyRow(ctx, n)) };
+}, { org: false });
+
+route("PUT", "/staff/keys/:name", (ctx) => {
+  const name = knownKey(ctx);
+  const value = String(ctx.body.value ?? "").trim();
+  if (!value) throw new MockError(400, "keys.empty", "Enter a value, or reset the key to use the server's setting.");
+  const choices = MOCK_KEYS.find(([n]) => n === name)![4];
+  if (choices && !choices.includes(value)) throw new MockError(400, "keys.invalid_choice", `Choose one of: ${choices.join(", ")}.`);
+  mockSaved.set(name, { value, at: new Date().toISOString(), by: ctx.userId! });
+  return keyRow(ctx, name);
+}, { org: false });
+
+route("DELETE", "/staff/keys/:name", (ctx) => {
+  const name = knownKey(ctx);
+  mockSaved.delete(name);
+  return keyRow(ctx, name);
+}, { org: false });
+
+route("GET", "/config/public", () => ({ cesium_ion_token: mockSaved.get("CESIUM_ION_TOKEN")?.value ?? "" }) satisfies T.PublicConfig, { org: false, auth: false });
+
 /** Repeatable pseudo-random numbers, so the demo shows the same platform each load. */
 function seeded(seed: number) {
   return () => {

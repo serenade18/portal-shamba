@@ -170,4 +170,14 @@ export const staff = {
   analytics: (days: T.AnalyticsDays) => http.get<T.StaffAnalytics>("/staff/analytics", { days }, { as: "admin", org: false }),
   mapFarms: (country: string) => http.get<T.StaffMapFarms>("/staff/farms", { country }, { as: "admin", org: false }),
   farmers: (q: string, cursor?: string) => http.get<T.Page<T.StaffFarmer>>("/staff/farmers", { q, cursor }, { as: "admin", org: false }),
+  /** Integration keys. Super admins only; other staff get 403. */
+  keys: () => http.get<{ keys: T.ManagedKey[] }>("/staff/keys", undefined, { as: "admin", org: false }),
+  setKey: (name: T.KeyName, value: string) => http.put<T.ManagedKey>(`/staff/keys/${name}`, { value }, { as: "admin", org: false }),
+  /** Forget the value saved here, so the server's environment applies again. */
+  resetKey: (name: T.KeyName) => http.del<T.ManagedKey>(`/staff/keys/${name}`, { as: "admin", org: false }),
+};
+
+/** Settings any browser may see, signed in or not. */
+export const config = {
+  public: () => http.get<T.PublicConfig>("/config/public", undefined, { auth: false, org: false }),
 };

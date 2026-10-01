@@ -667,3 +667,39 @@ export interface StaffAnalytics {
   recent_signups: StaffFarmer[];
   top_organisations: { id: string; name: string; created_at: string; members: number; owner: string | null; collected: string }[];
 }
+
+/* ---------- Integration keys (GET /staff/keys, super admins only) ---------- */
+
+export type KeyGroup = "sms" | "email" | "mpesa" | "sasapay" | "weather" | "maps" | "staff";
+export type KeyName =
+  | "SMS_API_KEY" | "SMS_CLIENT_ID" | "SMS_ACCESS_KEY" | "SMS_SENDER_ID"
+  | "RESEND_API_KEY"
+  | "MPESA_ENV" | "MPESA_CONSUMER_KEY" | "MPESA_CONSUMER_SECRET" | "MPESA_SHORTCODE" | "MPESA_PASSKEY" | "MPESA_CALLBACK_URL"
+  | "SASAPAY_ENV" | "SASAPAY_CLIENT_ID" | "SASAPAY_CLIENT_SECRET" | "SASAPAY_MERCHANT_CODE"
+  | "OPENWEATHER_API_KEY" | "AGRO_MONITORING_API_KEY"
+  | "CESIUM_ION_TOKEN"
+  | "STAFF_SIGNUP_KEY";
+
+/** One integration key. Secret values never leave the server: `preview` shows only their last characters. */
+export interface ManagedKey {
+  name: KeyName;
+  group: KeyGroup;
+  /** English, from the server; the portal shows its own translation. */
+  label: string;
+  kind: "secret" | "text" | "choice";
+  choices: string[];
+  help: string;
+  /** Handed to browsers (GET /config/public). */
+  public: boolean;
+  /** "admin": saved here, overriding the server's environment. */
+  source: "admin" | "environment" | "unset";
+  has_environment_value: boolean;
+  preview: string;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+/** GET /config/public: keys that are safe in any browser. */
+export interface PublicConfig {
+  cesium_ion_token: string;
+}

@@ -31,7 +31,8 @@ const IMPLEMENTED = [
   /^\/(milk-records|feeding-records|treatments)$/,
   /^\/batches(\/[0-9a-f-]{36}\/days)?$/,
   /^\/seasons(\/[0-9a-f-]{36}\/(activities|harvests))?$/,
-  /^\/staff\//, // staff analytics (the admin area)
+  /^\/staff\//, // staff analytics and integration keys (the admin area)
+  /^\/config\/public$/, // browser-safe keys, e.g. the Cesium ion token
 ];
 
 export class ApiError extends Error {
@@ -175,6 +176,7 @@ export async function api<T>(method: string, path: string, opts: RequestOptions 
 export const http = {
   get: <T>(path: string, query?: RequestOptions["query"], opts?: RequestOptions) => api<T>("GET", path, { ...opts, query }),
   post: <T>(path: string, body?: unknown, opts?: RequestOptions) => api<T>("POST", path, { ...opts, body }),
+  put: <T>(path: string, body?: unknown, opts?: RequestOptions) => api<T>("PUT", path, { ...opts, body }),
   patch: <T>(path: string, body?: unknown, opts?: RequestOptions) => api<T>("PATCH", path, { ...opts, body }),
   del: <T = void>(path: string, opts?: RequestOptions) => api<T>("DELETE", path, opts),
 };

@@ -1427,6 +1427,22 @@
   border-radius: 3px;
 }
 
+/* Staff: integration keys */
+.admin-key-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-key-preview {
+  font-size: var(--fs-small);
+  word-break: break-all;
+}
+.admin-key-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
 /* Drawing a farm boundary on satellite imagery */
 .boundary-map {
   position: relative;
