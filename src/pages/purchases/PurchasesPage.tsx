@@ -4,18 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useErrorText, useFarmId, useItems, useKey, usePaged, useRange } from "@/api/hooks";
-import type { Purchase } from "@/api/types";
+import type { Party, Purchase } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { LoadMore, Money, PageHead, RecordedBy, Table, Tabs, useCurrency, useTabParam, type Column } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, NoPermission, SkeletonRows } from "@/components/ui/feedback";
-import { ChoiceCards, DateField, FormError, MoneyField, QuantityField, SelectField, TextField } from "@/components/ui/forms";
+import { ChoiceCards, DateField, FormError, MoneyField, QuantityField, SelectField } from "@/components/ui/forms";
 import { SidePanel } from "@/components/ui/overlay";
 import { useQty, useT } from "@/i18n";
 import { formatDate, formatMoney, today } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useInvalidateOrg } from "../enterprise/forms";
-import { PartiesTable } from "../sales/SalesPage";
+import { PartiesTable, PartyPanel } from "../sales/SalesPage";
 import { PartyPicker, type NewParty } from "../sales/PartyPicker";
 
 interface Line {
@@ -161,25 +161,6 @@ function PurchaseDetailPanel({ purchase, onClose }: { purchase: Purchase; onClos
   );
 }
 
-function SupplierPanel({ onClose }: { onClose: () => void }) {
-  const t = useT();
-  const errorText = useErrorText();
-  const invalidate = useInvalidateOrg();
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const save = useMutation({ mutationFn: () => api.purchases.createSupplier({ name, phone }), onSuccess: () => (invalidate(), toast(t("supp.saved")), onClose()) });
-  const err = fieldErrors(save.error);
-  return (
-    <SidePanel title={t("supp.new")} onClose={onClose} onSubmit={() => save.mutate()} footer={<><Button onClick={onClose}>{t("common.cancel")}</Button><Button type="submit" variant="primary" loading={save.isPending}>{t("common.save")}</Button></>}>
-      <div className="stack">
-        <TextField label={t("common.name")} value={name} onChange={setName} error={err.name} autoFocus />
-        <TextField label={t("common.phone")} value={phone} onChange={setPhone} type="tel" placeholder="0712 345 678" error={err.phone} optional />
-        <FormError message={save.error && !Object.keys(err).length ? errorText(save.error) : null} />
-      </div>
-    </SidePanel>
-  );
-}
-
 export function PurchasesPage() {
   const t = useT();
   const key = useKey();
@@ -194,6 +175,7 @@ export function PurchasesPage() {
   const [panel, setPanel] = useState<"new" | "supplier" | null>(params.get("new") ? "new" : null);
   const [initialItem] = useState(params.get("item"));
   const [open, setOpen] = useState<Purchase | null>(null);
+  const [editing, setEditing] = useState<Party | null>(null);
 
   useEffect(() => {
     if (params.get("new")) setParams((p) => (p.delete("new"), p.delete("item"), p), { replace: true });
@@ -242,7 +224,7 @@ export function PurchasesPage() {
         ]}
       />
       {tab === "list" && listView}
-      {tab === "suppliers" && (suppliers.isLoading ? <SkeletonRows /> : suppliers.data?.length ? <PartiesTable rows={suppliers.data} balanceLabel={t("supp.owed")} /> : <div className="panel"><EmptyState text={t("supp.empty")} /></div>)}
+      {tab === "suppliers" && (suppliers.isLoading ? <SkeletonRows /> : suppliers.data?.length ? <PartiesTable rows={suppliers.data} balanceLabel={t("supp.owed")} onEdit={canWrite ? setEditing : undefined} /> : <div className="panel"><EmptyState text={t("supp.empty")} /></div>)}
       {tab === "owe" && (
         <div className="stack">
           {owing.length > 0 && <p>{t("purch.oweSummary", { amount: formatMoney(owing.reduce((s, x) => s + Number(x.balance), 0), currency), n: owing.length })}</p>}
@@ -250,7 +232,8 @@ export function PurchasesPage() {
         </div>
       )}
       {panel === "new" && <NewPurchasePanel initialItem={initialItem} onClose={() => setPanel(null)} />}
-      {panel === "supplier" && <SupplierPanel onClose={() => setPanel(null)} />}
+      {panel === "supplier" && <PartyPanel kind="supplier" onClose={() => setPanel(null)} />}
+      {editing && <PartyPanel kind="supplier" party={editing} onClose={() => setEditing(null)} />}
       {open && <PurchaseDetailPanel purchase={open} onClose={() => setOpen(null)} />}
     </>
   );

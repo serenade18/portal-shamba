@@ -1,4 +1,4 @@
-import type { Catalogue, Item, TypeCode } from "../types";
+import type { Catalogue, Item, TypeCode, VaccinationStep } from "../types";
 
 export const CATALOGUE: Catalogue = {
   version: 1,
@@ -91,3 +91,28 @@ export const TYPE_FEED: Partial<Record<TypeCode, string>> = {
 export function typeInfo(code: TypeCode) {
   return CATALOGUE.enterprise_types.find((t) => t.code === code)!;
 }
+
+/** Default vaccination schedules by batch age, as the backend's apps/catalogue/vaccinations.py (BAT-04). */
+export const VACCINATION_DEFAULTS: Partial<Record<TypeCode, VaccinationStep[]>> = {
+  layers: [
+    { day: 1, vaccine: "Marek's disease", note: "Usually given at the hatchery" },
+    { day: 7, vaccine: "Newcastle + Infectious bronchitis", note: "Drinking water" },
+    { day: 14, vaccine: "Gumboro (IBD)", note: "Drinking water" },
+    { day: 21, vaccine: "Newcastle (Lasota)", note: "Drinking water" },
+    { day: 28, vaccine: "Gumboro (IBD)", note: "Drinking water" },
+    { day: 42, vaccine: "Fowl pox", note: "Wing web" },
+    { day: 56, vaccine: "Fowl typhoid", note: "Injection" },
+    { day: 70, vaccine: "Newcastle (Lasota)", note: "Drinking water" },
+    { day: 126, vaccine: "Newcastle + IB + EDS (killed)", note: "Injection, before lay" },
+  ],
+  broilers: [
+    { day: 7, vaccine: "Newcastle + Infectious bronchitis", note: "Drinking water" },
+    { day: 14, vaccine: "Gumboro (IBD)", note: "Drinking water" },
+    { day: 21, vaccine: "Newcastle (Lasota)", note: "Drinking water" },
+    { day: 28, vaccine: "Gumboro (IBD)", note: "Drinking water" },
+  ],
+  fish: [],
+};
+
+/** Days from service to birth, as the backend's GESTATION_DAYS (LIV-05). */
+export const GESTATION_DAYS: Partial<Record<TypeCode, number>> = { dairy_cattle: 283, beef_cattle: 283, dairy_goats: 150, sheep: 147 };

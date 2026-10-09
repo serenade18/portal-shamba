@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { History, Plus } from "lucide-react";
+import { History, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useErrorText, useFarm, useKey } from "@/api/hooks";
-import type { Plot, StructureType, Tenure } from "@/api/types";
+import type { Plot, Structure, StructureType, Tenure } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { Money, PageHead, Table, Tabs, useCurrency, useTabParam } from "@/components/ui/data";
 import { Chip, EmptyState, NoPermission, SkeletonRows } from "@/components/ui/feedback";
@@ -18,23 +18,27 @@ import { useInvalidateOrg } from "../enterprise/forms";
 const TENURES: Tenure[] = ["owned", "leased", "family"];
 const STRUCTURES: StructureType[] = ["shed", "poultry_house", "pen", "pond", "store"];
 
-function PlotPanel({ onClose }: { onClose: () => void }) {
+/** Add a plot, or with `plot` rename it and correct its area or tenure (FRM-02, FRM-04). */
+function PlotPanel({ plot, onClose }: { plot?: Plot; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
   const { farm } = useFarm();
   const currency = useCurrency();
   const money = useCan("money.read");
   const invalidate = useInvalidateOrg();
-  const [f, setF] = useState({ name: "", area_acres: "", tenure: "owned" as Tenure, lease_cost: "" });
+  const [f, setF] = useState({ name: plot?.name ?? "", area_acres: plot?.area_acres ?? "", tenure: plot?.tenure ?? ("owned" as Tenure), lease_cost: plot?.lease_cost ?? "" });
   const [areaError, setAreaError] = useState<string>();
   const save = useMutation({
-    mutationFn: () => api.farms.createPlot({ farm_id: farm!.id, name: f.name, area_acres: f.area_acres, tenure: f.tenure, lease_cost: f.tenure === "leased" ? f.lease_cost || null : null }),
-    onSuccess: () => (invalidate(), toast(t("plot.saved")), onClose()),
+    mutationFn: () => {
+      const body = { name: f.name, area_acres: f.area_acres, tenure: f.tenure, lease_cost: f.tenure === "leased" ? f.lease_cost || null : null };
+      return plot ? api.farms.updatePlot(plot.id, money ? body : { name: body.name, area_acres: body.area_acres, tenure: body.tenure }) : api.farms.createPlot({ farm_id: farm!.id, ...body });
+    },
+    onSuccess: () => (invalidate(), toast(t(plot ? "plot.updated" : "plot.saved")), onClose()),
   });
   const err = fieldErrors(save.error);
   return (
     <SidePanel
-      title={t("farm.addPlot")}
+      title={plot ? t("plot.editTitle", { name: plot.name }) : t("farm.addPlot")}
       onClose={onClose}
       onSubmit={() => (Number(f.area_acres) > 0 ? (setAreaError(undefined), save.mutate()) : setAreaError(t("plot.areaError")))}
       footer={<><Button onClick={onClose}>{t("common.cancel")}</Button><Button type="submit" variant="primary" loading={save.isPending}>{t("common.save")}</Button></>}
@@ -50,19 +54,23 @@ function PlotPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function StructurePanel({ onClose }: { onClose: () => void }) {
+/** Add a structure, or with `structure` rename it or change its type or capacity (FRM-05). */
+function StructurePanel({ structure, onClose }: { structure?: Structure; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
   const { farm } = useFarm();
   const invalidate = useInvalidateOrg();
-  const [f, setF] = useState({ name: "", type: "shed" as StructureType, capacity: "" });
+  const [f, setF] = useState({ name: structure?.name ?? "", type: structure?.type ?? ("shed" as StructureType), capacity: structure?.capacity != null ? String(structure.capacity) : "" });
   const save = useMutation({
-    mutationFn: () => api.farms.createStructure({ farm_id: farm!.id, name: f.name, type: f.type, capacity: f.capacity ? Number(f.capacity) : null }),
-    onSuccess: () => (invalidate(), toast(t("structure.saved")), onClose()),
+    mutationFn: () => {
+      const body = { name: f.name, type: f.type, capacity: f.capacity ? Number(f.capacity) : null };
+      return structure ? api.farms.updateStructure(structure.id, body) : api.farms.createStructure({ farm_id: farm!.id, ...body });
+    },
+    onSuccess: () => (invalidate(), toast(t(structure ? "structure.updated" : "structure.saved")), onClose()),
   });
   const err = fieldErrors(save.error);
   return (
-    <SidePanel title={t("farm.addStructure")} onClose={onClose} onSubmit={() => save.mutate()} footer={<><Button onClick={onClose}>{t("common.cancel")}</Button><Button type="submit" variant="primary" loading={save.isPending}>{t("common.save")}</Button></>}>
+    <SidePanel title={structure ? t("structure.editTitle", { name: structure.name }) : t("farm.addStructure")} onClose={onClose} onSubmit={() => save.mutate()} footer={<><Button onClick={onClose}>{t("common.cancel")}</Button><Button type="submit" variant="primary" loading={save.isPending}>{t("common.save")}</Button></>}>
       <div className="stack">
         <SelectField label={t("structure.type")} value={f.type} onChange={(v) => setF({ ...f, type: v as StructureType })} options={STRUCTURES.map((x) => ({ value: x, label: t(`stype.${x}`) }))} />
         <TextField label={t("structure.name")} value={f.name} onChange={(name) => setF({ ...f, name })} error={err.name} />
@@ -110,6 +118,8 @@ export function FarmPage() {
   const [tab, setTab] = useTabParam(["plots", "structures"] as const, "plots");
   const [panel, setPanel] = useState<"plot" | "structure" | null>(null);
   const [history, setHistory] = useState<Plot | null>(null);
+  const [editPlot, setEditPlot] = useState<Plot | null>(null);
+  const [editStructure, setEditStructure] = useState<Structure | null>(null);
   const plots = useQuery({ queryKey: key("plots", farm?.id), queryFn: () => api.farms.plots(farm!.id), enabled: !!farm, select: (p) => p.results });
   const structures = useQuery({ queryKey: key("structures", farm?.id), queryFn: () => api.farms.structures(farm!.id), enabled: !!farm, select: (p) => p.results });
 
@@ -137,7 +147,17 @@ export function FarmPage() {
               { key: "a", header: t("plot.area"), numeric: true, render: (p) => qty(p.area_acres, "acres", 2), sort: (a, b) => Number(a.area_acres) - Number(b.area_acres) },
               { key: "t", header: t("plot.tenure"), render: (p) => <span>{t(`tenure.${p.tenure}`)}{money && p.lease_cost && <span className="small muted" style={{ display: "block" }}>{t("plot.perYear", { amount: formatMoney(p.lease_cost, currency) })}</span>}</span> },
               { key: "g", header: t("plot.growing"), render: (p) => p.growing_now ?? <span className="muted">{t("plot.nothing")}</span> },
-              { key: "h", header: <span className="visually-hidden">{t("plot.history")}</span>, label: "", render: (p) => <Button variant="quiet" size="sm" icon={<History size={14} />} onClick={() => setHistory(p)}>{t("plot.history")}</Button> },
+              {
+                key: "h",
+                header: <span className="visually-hidden">{t("plot.history")}</span>,
+                label: "",
+                render: (p) => (
+                  <span className="row" style={{ gap: 4, flexWrap: "nowrap", justifyContent: "flex-end" }}>
+                    <Button variant="quiet" size="sm" icon={<History size={14} />} onClick={() => setHistory(p)}>{t("plot.history")}</Button>
+                    {canWrite && <Button variant="quiet" size="sm" icon={<Pencil size={14} />} onClick={() => setEditPlot(p)}>{t("common.edit")}</Button>}
+                  </span>
+                ),
+              },
             ]}
           />
         </div>
@@ -150,11 +170,14 @@ export function FarmPage() {
             { key: "n", header: t("structure.name"), render: (s) => <span className="strong">{s.name}</span> },
             { key: "t", header: t("structure.type"), render: (s) => t(`stype.${s.type}`) },
             { key: "c", header: t("structure.capacity"), numeric: true, render: (s) => s.capacity ?? "–" },
+            ...(canWrite ? [{ key: "e", header: <span className="visually-hidden">{t("common.edit")}</span>, label: "", render: (s: Structure) => <Button variant="quiet" size="sm" icon={<Pencil size={14} />} onClick={() => setEditStructure(s)}>{t("common.edit")}</Button> }] : []),
           ]}
         />
       ))}
       {panel === "plot" && <PlotPanel onClose={() => setPanel(null)} />}
       {panel === "structure" && <StructurePanel onClose={() => setPanel(null)} />}
+      {editPlot && <PlotPanel plot={editPlot} onClose={() => setEditPlot(null)} />}
+      {editStructure && <StructurePanel structure={editStructure} onClose={() => setEditStructure(null)} />}
       {history && <PlotHistoryPanel plot={history} onClose={() => setHistory(null)} />}
     </>
   );

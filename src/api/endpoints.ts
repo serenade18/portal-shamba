@@ -1,4 +1,4 @@
-import { http } from "./client";
+import { api, http } from "./client";
 import type * as T from "./types";
 
 type Q = Record<string, string | number | boolean | null | undefined>;
@@ -25,6 +25,10 @@ export const me = {
     http.get<{ memberships: T.MembershipSummary[]; invitations: T.MyInvitation[] }>("/me/organisations", undefined, { org: false }),
   acceptInvitation: (id: string) =>
     http.post<{ memberships: T.MembershipSummary[] }>(`/me/invitations/${id}/accept`, undefined, { org: false }),
+  /** Everything kept about the signed-in person, as JSON (NFR-11). */
+  exportData: () => http.get<Record<string, unknown>>("/me/export", undefined, { org: false }),
+  /** Erases the account. Refused (409 account.last_owner) while they are the last owner of a farm account others use. */
+  deleteAccount: () => api<void>("DELETE", "/me", { body: { confirm: true }, org: false }),
 };
 
 export const org = {
@@ -57,9 +61,13 @@ export const farms = {
   setTypes: (farmId: string, picks: T.TypeCode[]) => http.post<T.Navigation>(`/farms/${farmId}/types`, { picks }),
   plots: (farmId: string) => http.get<T.Page<T.Plot>>("/plots", { farm_id: farmId }),
   createPlot: (body: Omit<T.Plot, "id" | "growing_now">) => http.post<T.Plot>("/plots", body),
+  updatePlot: (id: string, body: Partial<Pick<T.Plot, "name" | "area_acres" | "tenure" | "lease_cost">>) =>
+    http.patch<T.Plot & T.Edited>(`/plots/${id}`, body),
   plotHistory: (plotId: string) => http.get<T.PlotSeasonHistory[]>(`/plots/${plotId}/history`),
   structures: (farmId: string) => http.get<T.Page<T.Structure>>("/structures", { farm_id: farmId }),
   createStructure: (body: Omit<T.Structure, "id">) => http.post<T.Structure>("/structures", body),
+  updateStructure: (id: string, body: Partial<Pick<T.Structure, "name" | "type" | "capacity">>) =>
+    http.patch<T.Structure & T.Edited>(`/structures/${id}`, body),
 };
 
 export const enterprises = {
@@ -78,21 +86,40 @@ export const enterprises = {
 export const livestock = {
   animals: (enterpriseId: string) => http.get<T.Page<T.Animal>>("/animals", { enterprise_id: enterpriseId }),
   createAnimal: (body: Omit<T.Animal, "id" | "status" | "milk_7d">) => http.post<T.Animal>("/animals", body),
+  animal: (id: string) => http.get<T.Animal & T.Edited>(`/animals/${id}`),
+  updateAnimal: (id: string, body: Partial<Pick<T.Animal, "tag" | "name" | "sex" | "breed" | "birth_date" | "mother_id">>) =>
+    http.patch<T.Animal & T.Edited>(`/animals/${id}`, body),
+  breeding: (id: string) => http.get<T.Page<T.BreedingEvent>>(`/animals/${id}/breeding`),
+  recordService: (id: string, body: { service_date: string; method: T.BreedingMethod; sire: string; note: string }) =>
+    http.post<T.BreedingEvent>(`/animals/${id}/breeding`, body),
+  recordBirth: (id: string, body: { date: string; offspring: { tag: string; sex: T.Sex; name: string }[]; breeding_event_id: string | null }) =>
+    http.post<T.BirthResult>(`/animals/${id}/births`, body),
+  weights: (id: string, cursor?: string) => http.get<T.Page<T.AnimalWeight>>(`/animals/${id}/weights`, { cursor }),
+  recordWeight: (id: string, body: { date: string; kg: string }) => http.post<T.AnimalWeight>(`/animals/${id}/weights`, body),
   exitAnimal: (id: string, body: { reason: "sold" | "dead"; value: string; date: string }) =>
     http.post<T.Animal>(`/animals/${id}/exit`, body),
   recordMilk: (body: { enterprise_id: string; date: string; litres: string; animal_id?: string | null }) =>
     http.post<T.DailyRecord>("/milk-records", body),
   recordFeed: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string }) =>
     http.post<T.DailyRecord>("/feeding-records", body),
-  recordTreatment: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string; dose_note: string; subject: string }) =>
+  recordTreatment: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string; dose_note: string; subject: string; schedule_day?: number | null }) =>
     http.post<T.HealthRecord>("/treatments", body),
 };
 
 export const batches = {
-  start: (body: { farm_id: string; type: T.TypeCode; name: string; count: number; date: string; source: string; cost: string; structure_id: string | null }) =>
+  start: (body: { farm_id: string; type: T.TypeCode; name: string; count: number; date: string; source: string; cost: string; structure_id: string | null; age_days: number }) =>
     http.post<T.Enterprise>("/batches", body),
   recordDay: (id: string, body: { date: string; feed_item_id: string | null; feed_qty: string; feed_unit: string; deaths: number; eggs_trays: string; note: string }) =>
     http.post<T.DailyRecord>(`/batches/${id}/days`, body),
+  /** Sample weighings, broilers and fish only (BAT-05). */
+  weights: (id: string, cursor?: string) => http.get<T.Page<T.SampleWeight>>(`/batches/${id}/weights`, { cursor }),
+  recordWeight: (id: string, body: { date: string; sample_size: number; avg_kg: string }) =>
+    http.post<T.SampleWeight>(`/batches/${id}/weights`, body),
+  vaccinations: (id: string) => http.get<T.BatchVaccinations>(`/batches/${id}/vaccinations`),
+  schedules: () => http.get<T.Page<T.VaccinationSchedule>>("/vaccination-schedules"),
+  /** steps null puts the catalogue's default back. */
+  setSchedule: (type: T.TypeCode, steps: T.VaccinationStep[] | null) =>
+    http.put<T.VaccinationSchedule>("/vaccination-schedules", { type, steps }),
 };
 
 export const crops = {
@@ -126,6 +153,9 @@ export const sales = {
     http.post<T.Sale>(`/sales/${id}/payments`, body),
   customers: () => http.get<T.Page<T.Party>>("/customers"),
   createCustomer: (body: { name: string; phone: string }) => http.post<T.Party>("/customers", body),
+  updateCustomer: (id: string, body: { name: string; phone: string }) => http.patch<T.Party & T.Edited>(`/customers/${id}`, body),
+  /** SMS goes from the server; WhatsApp comes back as a link to open (SAL-05). */
+  sendReceipt: (id: string, body: { channel: T.ReceiptChannel; phone: string }) => http.post<T.Receipt>(`/sales/${id}/receipt`, body),
 };
 
 export const purchases = {
@@ -134,6 +164,7 @@ export const purchases = {
   pay: (id: string, amount: string) => http.post<T.Purchase>(`/purchases/${id}/payments`, { amount }),
   suppliers: () => http.get<T.Page<T.Party>>("/suppliers"),
   createSupplier: (body: { name: string; phone: string }) => http.post<T.Party>("/suppliers", body),
+  updateSupplier: (id: string, body: { name: string; phone: string }) => http.patch<T.Party & T.Edited>(`/suppliers/${id}`, body),
 };
 
 export const finance = {

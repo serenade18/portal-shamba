@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { UserPlus } from "lucide-react";
+import { Download, UserPlus } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useCatalogue, useErrorText, useFarm, useKey, useNavigation } from "@/api/hooks";
 import type { Invitation, Locale, Member, Role, TypeCode } from "@/api/types";
-import { useSetLocale } from "@/components/shell/TopBar";
+import { useSetLocale, useSignOut } from "@/components/shell/TopBar";
 import { Button } from "@/components/ui/Button";
 import { PageHead, Panel, Table, Tabs, useTabParam } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, Notice, Skeleton, SkeletonRows } from "@/components/ui/feedback";
@@ -295,6 +295,60 @@ function Members() {
   );
 }
 
+/** A copy of everything kept about you, and erasing your account (NFR-11). */
+function YourData() {
+  const t = useT();
+  const errorText = useErrorText();
+  const signOut = useSignOut();
+  const [confirming, setConfirming] = useState(false);
+  const download = useMutation({
+    mutationFn: api.me.exportData,
+    onSuccess: (data) => {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `shamba-os-my-data-${new Date().toISOString().slice(0, 10)}.json` });
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+  });
+  const erase = useMutation({ mutationFn: api.me.deleteAccount, onSuccess: () => (toast(t("account.deleted")), signOut()) });
+  return (
+    <>
+      <Panel title={t("account.dataTitle")}>
+        <div className="stack">
+          <p className="small muted">{t("account.dataHelp")}</p>
+          <FormError message={download.error ? errorText(download.error) : null} />
+          <div>
+            <Button icon={<Download size={16} />} loading={download.isPending} onClick={() => download.mutate()}>{t("account.download")}</Button>
+          </div>
+        </div>
+      </Panel>
+      <Panel title={t("account.deleteTitle")}>
+        <div className="stack">
+          <p className="small muted">{t("account.deleteHelp")}</p>
+          <div>
+            <Button variant="destructive" onClick={() => (erase.reset(), setConfirming(true))}>{t("account.delete")}</Button>
+          </div>
+        </div>
+      </Panel>
+      {confirming && (
+        <ConfirmDialog
+          title={t("account.deleteConfirmTitle")}
+          body={
+            <div className="stack">
+              <p>{t("account.deleteConfirm")}</p>
+              <FormError message={erase.error ? errorText(erase.error) : null} />
+            </div>
+          }
+          confirmLabel={t("account.delete")}
+          loading={erase.isPending}
+          onConfirm={() => erase.mutate()}
+          onClose={() => setConfirming(false)}
+        />
+      )}
+    </>
+  );
+}
+
 function You() {
   const t = useT();
   const errorText = useErrorText();
@@ -329,6 +383,7 @@ function You() {
           </div>
         </form>
       </Panel>
+      <YourData />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { TypeCode } from "../types";
-import { TYPE_ITEMS } from "./catalogue";
+import { TYPE_ITEMS, VACCINATION_DEFAULTS } from "./catalogue";
 import {
   activity, batchDay, ensureItems, feedDay, financeEntry, harvest, itemId, milkDay, purchase, reverse, sell,
   startEnterprise, treatment, useInput,
@@ -153,6 +153,31 @@ function seedKamau(): OrgData {
   }
   data.animals[5].mother_id = data.animals[0].id;
 
+  // Breeding (LIV-05): Wairimu calved Baraka; she and Njeri are served again and waiting.
+  const [wairimu, njeri, chebet] = data.animals;
+  const service = (animal: typeof wairimu, served: number, method: "natural" | "ai", sire: string, born: number | null) =>
+    data.breeding.push({
+      id: crypto.randomUUID(), animal_id: animal.id, service_date: daysAgo(served), method, sire, note: "", expected_due: daysAgo(served - 283),
+      outcome: born != null ? "born" : null, birth_date: born != null ? daysAgo(born) : null, recorded_by: web,
+    });
+  service(wairimu, 463, "ai", "Friesian, KAGRC 2041", 180);
+  service(wairimu, 95, "ai", "Friesian, KAGRC 2107", null);
+  service(njeri, 240, "natural", "Neighbour's Ayrshire bull", null);
+  service(chebet, 30, "ai", "Friesian, KAGRC 2107", null);
+
+  // Weights (LIV-06): monthly for the calf, now and then for the cows.
+  for (let m = 5; m >= 0; m--) data.weights.push({ id: crypto.randomUUID(), animal_id: data.animals[5].id, date: daysAgo(m * 30 + 3), kg: 140 - m * 21, recorded_by: maryPhone(daysAgo(m * 30 + 3)) });
+  for (const [i, kg] of [[0, 548], [1, 472], [2, 515]] as const) {
+    data.weights.push({ id: crypto.randomUUID(), animal_id: data.animals[i].id, date: daysAgo(64), kg: kg - 6, recorded_by: web });
+    data.weights.push({ id: crypto.randomUUID(), animal_id: data.animals[i].id, date: daysAgo(8), kg, recorded_by: web });
+  }
+
+  // Layers were vaccinated on schedule (BAT-04).
+  for (const step of VACCINATION_DEFAULTS.layers ?? []) {
+    const date = daysAgo(210 - step.day);
+    data.health.push({ id: crypto.randomUUID(), enterprise_id: layers.id, date, product: step.vaccine, dose_note: step.note, subject: "Whole batch", cost: 0, schedule_day: step.day, recorded_by: maryPhone(date) });
+  }
+
   // Beans last season: closed, for plot history (FRM-06).
   purchase(data, { farm, supplier: agrovet, date: daysAgo(335), lines: [{ item: itemId("seed_beans"), qty: 40, unit: "kg", price: 180 }, { item: itemId("dap"), qty: 3, unit: "bag", price: 3800 }], paid: "full", by: web });
   activity(data, beans, { date: daysAgo(330), type: "planting", inputs: [{ item: itemId("seed_beans"), qty: 40, unit: "kg" }, { item: itemId("dap"), qty: 3, unit: "bag" }], labour: 4500, service: 6000, by: web });
@@ -225,7 +250,10 @@ function seedKamau(): OrgData {
       const age = b7Start - d;
       const dd = d === 1 ? 6 : r() < 0.2 ? 1 : 0;
       batchDay(data, b7, { date, feedItem: itemId("broiler_feed"), feedQty: age < 14 ? 0.4 : 0.9, feedUnit: "bag", deaths: dd, eggsTrays: 0, note: d === 1 ? "Birds weak, some coughing" : "", by });
-      if (age === 7) treatment(data, b7, { date, item: itemId("newcastle"), qty: 3, unit: "vial", dose: "Eye drop, day 7", subject: "Whole batch", by });
+      if (age === 7) treatment(data, b7, { date, item: itemId("newcastle"), qty: 3, unit: "vial", dose: "Eye drop, day 7", subject: "Whole batch", scheduleDay: 7, by });
+      if (age === 14 || age === 21) data.health.push({ id: crypto.randomUUID(), enterprise_id: b7.id, date, product: age === 14 ? "Gumboro (IBD)" : "Newcastle (Lasota)", dose_note: "Drinking water", subject: "Whole batch", cost: 0, schedule_day: age, recorded_by: by });
+      // Sample weighings (BAT-05): 20 birds every week.
+      if (age % 7 === 0) data.sampleWeights.push({ id: crypto.randomUUID(), enterprise_id: b7.id, date, sample_size: 20, avg_kg: Number((0.042 * age + 0.004 * age * age).toFixed(3)), recorded_by: by });
       if (d === 5) treatment(data, b7, { date, item: itemId("coccidiostat"), qty: 2, unit: "sachet", dose: "In drinking water, 3 days", subject: "Whole batch", by });
     }
 

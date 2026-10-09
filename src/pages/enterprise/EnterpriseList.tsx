@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, ModuleHidden, SkeletonRows } from "@/components
 import { useQty, useT, type MsgKey } from "@/i18n";
 import { formatDate } from "@/lib/format";
 import { useCan } from "@/stores/session";
+import { SchedulePanel } from "./BatchPanels";
 import { StartBatchPanel, StartSeasonPanel } from "./forms";
 import { enterprisePath } from "./paths";
 
@@ -26,7 +27,9 @@ export function EnterpriseList({ module }: { module: Module }) {
   const catalogue = useCatalogue();
   const list = useEnterprises(module);
   const canRecord = useCan("records.write");
+  const canSchedule = useCan("schedules.write");
   const [starting, setStarting] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const meta = TITLES[module];
 
   if (nav.data && !nav.data.modules.includes(module)) return <ModuleHidden typeLabel={t(meta.title)} />;
@@ -68,10 +71,15 @@ export function EnterpriseList({ module }: { module: Module }) {
     <>
       <PageHead
         title={t(meta.title)}
-        actions={meta.start && canRecord && types.length > 0 && (
-          <Button variant="primary" icon={<Plus size={18} />} onClick={() => setStarting(true)}>
-            {t(meta.start)}
-          </Button>
+        actions={types.length > 0 && (
+          <>
+            {module === "batches" && canSchedule && <Button onClick={() => setScheduling(true)}>{t("vacc.scheduleTitle")}</Button>}
+            {meta.start && canRecord && (
+              <Button variant="primary" icon={<Plus size={18} />} onClick={() => setStarting(true)}>
+                {t(meta.start)}
+              </Button>
+            )}
+          </>
         )}
       />
       {list.isLoading ? (
@@ -97,6 +105,7 @@ export function EnterpriseList({ module }: { module: Module }) {
         </div>
       )}
       {starting && module === "batches" && <StartBatchPanel types={types} onClose={() => setStarting(false)} onStarted={(id) => navigate(enterprisePath(module, id))} />}
+      {scheduling && <SchedulePanel types={types.filter((c) => c !== "fish").length ? types.filter((c) => c !== "fish") : types} onClose={() => setScheduling(false)} />}
       {starting && module === "crops" && <StartSeasonPanel types={types} onClose={() => setStarting(false)} onStarted={(id) => navigate(enterprisePath(module, id))} />}
     </>
   );
