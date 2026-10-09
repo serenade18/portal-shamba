@@ -45,6 +45,8 @@ export interface User {
   username: string | null;
   preferred_locale: Locale;
   date_joined: string;
+  /** Shamba OS staff: they use the admin area, not a farm account. */
+  is_staff?: boolean;
 }
 
 export interface MembershipSummary {
@@ -64,6 +66,15 @@ export interface SignInResponse {
   user: User;
   memberships: MembershipSummary[];
 }
+
+/** A staff member's read-only "view as farmer" session (POST /staff/farmers/{id}/impersonate). */
+export interface Impersonation {
+  by: string;
+  expires_at: string;
+  read_only: boolean;
+}
+
+export type ImpersonationResponse = SignInResponse & { impersonation: Impersonation };
 
 export interface RegisterInput {
   name: string;

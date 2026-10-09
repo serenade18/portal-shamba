@@ -20,7 +20,7 @@ export const auth = {
 
 export const me = {
   get: () => http.get<T.User>("/me", undefined, { org: false }),
-  update: (body: Partial<Pick<T.User, "name" | "preferred_locale">>) => http.patch<T.User>("/me", body, { org: false }),
+  update: (body: Partial<Pick<T.User, "name" | "preferred_locale" | "phone" | "email">>) => http.patch<T.User>("/me", body, { org: false }),
   organisations: () =>
     http.get<{ memberships: T.MembershipSummary[]; invitations: T.MyInvitation[] }>("/me/organisations", undefined, { org: false }),
   acceptInvitation: (id: string) =>
@@ -201,6 +201,8 @@ export const staff = {
   analytics: (days: T.AnalyticsDays) => http.get<T.StaffAnalytics>("/staff/analytics", { days }, { as: "admin", org: false }),
   mapFarms: (country: string) => http.get<T.StaffMapFarms>("/staff/farms", { country }, { as: "admin", org: false }),
   farmer: (id: string) => http.get<T.StaffFarmerDetail>(`/staff/farmers/${id}`, undefined, { as: "admin", org: false }),
+  impersonate: (id: string) =>
+    http.post<T.ImpersonationResponse>(`/staff/farmers/${id}/impersonate`, undefined, { as: "admin", org: false }),
   farmers: (q: string, cursor?: string) => http.get<T.Page<T.StaffFarmer>>("/staff/farmers", { q, cursor }, { as: "admin", org: false }),
   /** Integration keys. Super admins only; other staff get 403. */
   keys: () => http.get<{ keys: T.ManagedKey[] }>("/staff/keys", undefined, { as: "admin", org: false }),

@@ -2,12 +2,14 @@ import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } fr
 import { useFarm, useNavigation } from "./api/hooks";
 import { MOCK_MODE } from "./api/client";
 import { AppShell } from "./components/shell/AppShell";
+import { useSignOut } from "./components/shell/TopBar";
+import { Button } from "./components/ui/Button";
 import { Toaster } from "./components/ui/feedback";
-import { ErrorState, Skeleton } from "./components/ui/feedback";
+import { ErrorState, Notice, Skeleton } from "./components/ui/feedback";
+import { useT } from "./i18n";
 import { AlertsPage } from "./pages/alerts/AlertsPage";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminLayout, RequireAdmin } from "./pages/admin/AdminLayout";
-import { AdminSignIn } from "./pages/admin/AdminSignIn";
 import { AdminSignUp } from "./pages/admin/AdminSignUp";
 import { AdminFarmer } from "./pages/admin/AdminFarmer";
 import { AdminFarmers } from "./pages/admin/AdminFarmers";
@@ -46,6 +48,23 @@ function FullPageLoading() {
 }
 
 /**
+ * Signed in, but a member of no farm account (removed from their only farm, say).
+ * Say so, rather than wait forever for farms that can't load.
+ */
+function NoFarmAccount() {
+  const t = useT();
+  const signOut = useSignOut();
+  return (
+    <div style={{ padding: 32, maxWidth: 560 }}>
+      <Notice tone="amber">
+        <p>{t("setup.noFarmAccount")}</p>
+        <Button variant="quiet" size="sm" onClick={signOut} style={{ marginTop: 8, paddingLeft: 0 }}>{t("top.signOut")}</Button>
+      </Notice>
+    </div>
+  );
+}
+
+/**
  * Setup runs before the portal: a farm first (7.7), then what it keeps (7.8).
  * Leaving before choosing returns the owner to the choice screen, never an
  * empty dashboard. Invited members join farms whose choices are made.
@@ -58,6 +77,7 @@ function RequireSetup() {
   // fails, carry on to the portal rather than loop between loading and the page
   // (every page that mounts would retry it, and each retry reads as "loading").
   const navLoading = nav.isLoading && nav.errorUpdateCount === 0;
+  if (!role) return <NoFarmAccount />;
   if (isLoading || (farm && navLoading)) return <FullPageLoading />;
   // Couldn't load the farms: say so, rather than send an owner to set up a farm they already have.
   if (!farm && error) return <div style={{ padding: 32, maxWidth: 720 }}><ErrorState error={error} onRetry={() => refetch()} /></div>;
@@ -69,8 +89,9 @@ function RequireSetup() {
 const router = createBrowserRouter([
   { path: "/sign-in", element: <SignIn /> },
   { path: "/reset-password", element: <ResetPassword /> },
-  // Shamba OS staff: a separate sign-in and session (stores/adminSession).
-  { path: "/admin/sign-in", element: <AdminSignIn /> },
+  // One sign-in for everyone: staff land in /admin, farmers in their farm (pages/auth/SignIn).
+  // Staff keep a separate session (stores/adminSession). The old staff address still works.
+  { path: "/admin/sign-in", element: <Navigate to="/sign-in" replace /> },
   // Super admin sign-up: not linked from anywhere, and useless without the server's signup key.
   { path: "/admin/sign-up", element: <AdminSignUp /> },
   {

@@ -11,6 +11,7 @@ import { Notice } from "@/components/ui/feedback";
 import { FormError, Segmented, TextField } from "@/components/ui/forms";
 import { useT } from "@/i18n";
 import { normalizePhone } from "@/lib/phone";
+import { useAdminSession } from "@/stores/adminSession";
 import { useSession } from "@/stores/session";
 import { useUi } from "@/stores/ui";
 import { PasswordField } from "./PasswordField";
@@ -37,8 +38,10 @@ export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
   const signedIn = useSession((s) => !!s.refresh);
+  const staffSignedIn = useAdminSession((s) => !!s.refresh);
   const installId = useSession((s) => s.installId);
   const signIn = useSession((s) => s.signIn);
+  const adminSignIn = useAdminSession((s) => s.signIn);
   const locale = useUi((s) => s.locale);
   const setLocale = useUi((s) => s.setLocale);
 
@@ -51,9 +54,15 @@ export function SignIn() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const done = (res: SignInResponse) => {
-    signIn(res);
     if (!res.is_new_user && res.user.preferred_locale) setLocale(res.user.preferred_locale);
     const from = (location.state as { from?: string } | null)?.from;
+    // Role decides where a sign-in lands: Shamba OS staff in the admin area, everyone else in their farm.
+    if (res.user.is_staff) {
+      adminSignIn(res);
+      navigate(from?.startsWith("/admin") ? from : "/admin", { replace: true });
+      return;
+    }
+    signIn(res);
     navigate(from && from !== "/sign-in" ? from : "/", { replace: true });
   };
 
@@ -65,6 +74,7 @@ export function SignIn() {
   });
   const forgot = useMutation({ mutationFn: () => api.auth.forgotPassword(reg.email.trim(), locale), onSuccess: () => setMode("sent") });
 
+  if (staffSignedIn) return <Navigate to="/admin" replace />;
   if (signedIn) return <Navigate to="/" replace />;
 
   const go = (m: Mode) => {

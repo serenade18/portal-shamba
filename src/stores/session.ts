@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { Capability, MembershipSummary, SignInResponse, User } from "@/api/types";
+import type { Capability, Impersonation, ImpersonationResponse, MembershipSummary, SignInResponse, User } from "@/api/types";
 
 function newInstallId(): string {
   return crypto.randomUUID();
@@ -15,8 +15,11 @@ interface SessionState {
   user: User | null;
   memberships: MembershipSummary[];
   activeOrgId: string | null;
+  /** Set while Shamba OS staff are viewing the portal as this farmer (read-only). */
+  impersonation: Impersonation | null;
 
   signIn: (res: SignInResponse) => void;
+  startImpersonation: (res: ImpersonationResponse) => void;
   setTokens: (access: string, refresh?: string) => void;
   setUser: (user: User) => void;
   setMemberships: (memberships: MembershipSummary[]) => void;
@@ -34,6 +37,7 @@ export const useSession = create<SessionState>()(
       user: null,
       memberships: [],
       activeOrgId: null,
+      impersonation: null,
 
       signIn: (res) =>
         set({
@@ -43,24 +47,36 @@ export const useSession = create<SessionState>()(
           user: res.user,
           memberships: res.memberships,
           activeOrgId: pickOrg(res.memberships, get().activeOrgId),
+          impersonation: null,
+        }),
+      startImpersonation: (res) =>
+        set({
+          access: res.access,
+          refresh: res.refresh,
+          deviceId: res.device_id,
+          user: res.user,
+          memberships: res.memberships,
+          activeOrgId: pickOrg(res.memberships, null),
+          impersonation: res.impersonation,
         }),
       setTokens: (access, refresh) => set((s) => ({ access, refresh: refresh ?? s.refresh })),
       setUser: (user) => set({ user }),
       setMemberships: (memberships) => set((s) => ({ memberships, activeOrgId: pickOrg(memberships, s.activeOrgId) })),
       switchOrg: (orgId) => set({ activeOrgId: orgId }),
-      signOut: () => set({ access: null, refresh: null, deviceId: null, user: null, memberships: [], activeOrgId: null }),
+      signOut: () => set({ access: null, refresh: null, deviceId: null, user: null, memberships: [], activeOrgId: null, impersonation: null }),
     }),
     {
       name: "shamba-session",
       storage: createJSONStorage(() => localStorage),
       // The access token lives in memory only; the refresh token gets a new one on load.
-      partialize: ({ installId, refresh, deviceId, user, memberships, activeOrgId }) => ({
+      partialize: ({ installId, refresh, deviceId, user, memberships, activeOrgId, impersonation }) => ({
         installId,
         refresh,
         deviceId,
         user,
         memberships,
         activeOrgId,
+        impersonation,
       }),
     },
   ),

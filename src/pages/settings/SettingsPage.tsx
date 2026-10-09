@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, UserPlus } from "lucide-react";
+import { Download, Save, UserPlus } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import * as api from "@/api/endpoints";
@@ -14,8 +14,8 @@ import { ConfirmDialog, SidePanel } from "@/components/ui/overlay";
 import { useT } from "@/i18n";
 import { COUNTIES } from "@/lib/counties";
 import { acres, boundaryProblem, fromPolygon, toPolygon, type LngLat } from "@/lib/geo";
-import { formatDate } from "@/lib/format";
-import { formatPhone } from "@/lib/phone";
+import { formatDate, initials } from "@/lib/format";
+import { formatPhone, normalizePhone } from "@/lib/phone";
 import { useCan, useMembership, useSession } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useUi } from "@/stores/ui";
@@ -314,7 +314,7 @@ function YourData() {
   const erase = useMutation({ mutationFn: api.me.deleteAccount, onSuccess: () => (toast(t("account.deleted")), signOut()) });
   return (
     <>
-      <Panel title={t("account.dataTitle")}>
+      <Panel title={t("account.dataTitle")} className="panel-fill">
         <div className="stack">
           <p className="small muted">{t("account.dataHelp")}</p>
           <FormError message={download.error ? errorText(download.error) : null} />
@@ -323,7 +323,7 @@ function YourData() {
           </div>
         </div>
       </Panel>
-      <Panel title={t("account.deleteTitle")}>
+      <Panel title={t("account.deleteTitle")} className="panel-fill">
         <div className="stack">
           <p className="small muted">{t("account.deleteHelp")}</p>
           <div>
@@ -355,19 +355,31 @@ function You() {
   const errorText = useErrorText();
   const user = useSession((s) => s.user);
   const setUser = useSession((s) => s.setUser);
+  const role = useMembership()?.role;
   const locale = useUi((s) => s.locale);
   const setLocale = useSetLocale();
   const [name, setName] = useState(user?.name ?? "");
-  const save = useMutation({ mutationFn: () => api.me.update({ name: name.trim() }), onSuccess: (u) => (setUser(u), toast(t("settings.saved"))) });
+  const [phone, setPhone] = useState(formatPhone(user?.phone));
+  const [email, setEmail] = useState(user?.email ?? "");
+  const changes = {
+    ...(name.trim() !== (user?.name ?? "") && { name: name.trim() }),
+    ...(normalizePhone(phone) !== user?.phone && { phone: normalizePhone(phone) ?? phone.trim() }),
+    ...(email.trim().toLowerCase() !== (user?.email ?? "") && { email: email.trim() }),
+  };
+  const save = useMutation({
+    mutationFn: () => api.me.update(changes),
+    onSuccess: (u) => {
+      setUser(u);
+      setPhone(formatPhone(u.phone));
+      setEmail(u.email ?? "");
+      toast(t("settings.saved"));
+    },
+  });
+  const errors = fieldErrors(save.error);
+  const displayName = name.trim() || user?.name || formatPhone(user?.phone);
   return (
-    <div className="stack-lg" style={{ maxWidth: 480 }}>
-      <Panel title={t("settings.language")}>
-        <div className="stack">
-          <ChoiceCards<Locale> label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "sw", label: "Kiswahili" }, { value: "en", label: "English" }, { value: "fr", label: "Français" }]} />
-          <p className="small muted">{t("settings.languageHelp")}</p>
-        </div>
-      </Panel>
-      <Panel title={t("settings.name")}>
+    <div className="stack-lg">
+      <Panel title={t("settings.profileTitle")}>
         <form
           className="stack"
           noValidate
@@ -376,15 +388,39 @@ function You() {
             save.mutate();
           }}
         >
-          <TextField label={t("settings.name")} value={name} onChange={setName} autoComplete="name" />
-          <p className="small muted">{t("settings.phone")}: {formatPhone(user?.phone)}</p>
+          <div className="profile-head">
+            <span className="avatar avatar-lg" aria-hidden>{initials(displayName || "?")}</span>
+            <div>
+              <p className="strong">{displayName}</p>
+              <p className="small muted">
+                {[role && t(`role.${role}`), user?.date_joined && t("settings.joined", { date: formatDate(user.date_joined, t.locale) })].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+          </div>
+          <div className="form-grid">
+            <TextField label={t("settings.name")} value={name} onChange={setName} autoComplete="name" error={errors.name} />
+            <SelectField
+              label={t("settings.language")}
+              value={locale}
+              onChange={(v) => setLocale(v as Locale)}
+              hint={t("settings.languageHelp")}
+              options={[{ value: "sw", label: "Kiswahili" }, { value: "en", label: "English" }, { value: "fr", label: "Français" }]}
+            />
+            <TextField label={t("auth.phone")} type="tel" value={phone} onChange={setPhone} autoComplete="tel" error={errors.phone} />
+            <TextField label={t("auth.email")} type="email" value={email} onChange={setEmail} autoComplete="email" error={errors.email} optional />
+          </div>
+          <p className="small muted">{t("settings.contactHelp")}</p>
           <FormError message={save.error ? errorText(save.error) : null} />
-          <div>
-            <Button type="submit" variant="primary" loading={save.isPending}>{t("common.save")}</Button>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <Button type="submit" variant="primary" icon={<Save size={16} aria-hidden />} loading={save.isPending} disabled={!Object.keys(changes).length}>
+              {t("common.save")}
+            </Button>
           </div>
         </form>
       </Panel>
-      <YourData />
+      <div className="grid-2">
+        <YourData />
+      </div>
     </div>
   );
 }

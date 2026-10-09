@@ -6,6 +6,7 @@ import { cx } from "@/lib/format";
 import { useUi } from "@/stores/ui";
 import { useNavItems, type NavItem } from "./nav";
 import { Brand } from "./Brand";
+import { ImpersonationBanner } from "./ImpersonationBanner";
 import { TopBar } from "./TopBar";
 
 function NavEntry({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
@@ -66,6 +67,7 @@ export function AppShell() {
       </nav>
       <div className="main">
         <TopBar />
+        <ImpersonationBanner />
         {!online && (
           <div className="offline-banner" role="status">
             <WifiOff size={18} aria-hidden />

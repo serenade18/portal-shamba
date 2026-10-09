@@ -1,17 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Mail, MapPin, MapPinOff, Phone } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Eye, Mail, MapPin, MapPinOff, Phone } from "lucide-react";
 import { Suspense, lazy, useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { ApiError } from "@/api/client";
 import * as api from "@/api/endpoints";
 import type { StaffFarmerDetail } from "@/api/types";
-import { ButtonLink } from "@/components/ui/Button";
+import { useErrorText } from "@/api/hooks";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { PageHead, Panel, Table } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, NoPermission, Skeleton, SkeletonRows } from "@/components/ui/feedback";
 import { LANGUAGE_NAMES, useT } from "@/i18n";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
+import { useSession } from "@/stores/session";
+import { toast } from "@/stores/toast";
 import { useCountryName } from "./geo";
 import { LandBanner } from "./LandBanner";
 
@@ -43,6 +46,29 @@ export function AdminFarmer() {
   return <>{back}<Farmer f={q.data} /></>;
 }
 
+/** Opens the farmer portal as this farmer sees it: read-only, for an hour (super admins only). */
+function ViewAsFarmer({ id }: { id: string }) {
+  const t = useT();
+  const errorText = useErrorText();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const start = useMutation({
+    mutationFn: () => api.staff.impersonate(id),
+    onSuccess: (res) => {
+      // The farmer portal starts clean: nothing cached from another farmer's session.
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "admin" });
+      useSession.getState().startImpersonation(res);
+      navigate("/", { replace: false });
+    },
+    onError: (e) => toast(e instanceof ApiError && e.status === 403 && e.code === "permission_denied" ? t("impersonation.superOnly") : errorText(e), "error"),
+  });
+  return (
+    <Button variant="secondary" size="sm" icon={<Eye size={16} aria-hidden />} loading={start.isPending} onClick={() => start.mutate()} title={t("impersonation.help")}>
+      {t("impersonation.start")}
+    </Button>
+  );
+}
+
 function Farmer({ f }: { f: StaffFarmerDetail }) {
   const t = useT();
   const countryName = useCountryName();
@@ -61,6 +87,7 @@ function Farmer({ f }: { f: StaffFarmerDetail }) {
           </span>
         }
         sub={t("admin.farmer.joined", { date: formatDate(f.date_joined, t.locale) })}
+        actions={f.is_active && <ViewAsFarmer id={f.id} />}
       />
 
       <div className="stack">

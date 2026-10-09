@@ -11,11 +11,11 @@ import { cx, initials } from "@/lib/format";
 import { useAdminSession } from "@/stores/adminSession";
 import { useUi } from "@/stores/ui";
 
-/** Anything under /admin needs a staff session; farmers' sessions don't count. */
+/** Anything under /admin needs a staff session; farmers' sessions don't count. Staff sign in at /sign-in too. */
 export function RequireAdmin() {
   const refresh = useAdminSession((s) => s.refresh);
   const location = useLocation();
-  if (!refresh) return <Navigate to="/admin/sign-in" replace state={{ from: location.pathname }} />;
+  if (!refresh) return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />;
   return <Outlet />;
 }
 
@@ -51,7 +51,7 @@ export function AdminLayout() {
     }
     signOut();
     qc.removeQueries({ queryKey: ["admin"] });
-    navigate("/admin/sign-in", { replace: true });
+    navigate("/sign-in", { replace: true });
   };
 
   const name = user?.name || user?.email || "";

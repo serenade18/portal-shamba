@@ -82,7 +82,7 @@ export function AdminSignUp() {
         <FormError message={formError ? errorText(register.error) : null} />
         <Button type="submit" variant="primary" block loading={register.isPending}>{t("auth.createAccount")}</Button>
         {MOCK_MODE === "all" && <Notice tone="info">{t("admin.signUpDemoHint")}</Notice>}
-        <p className="auth-switch">{t("auth.haveAccount")} <Link to="/admin/sign-in">{t("auth.signIn")}</Link></p>
+        <p className="auth-switch">{t("auth.haveAccount")} <Link to="/sign-in">{t("auth.signIn")}</Link></p>
       </form>
     </SplitLayout>
   );

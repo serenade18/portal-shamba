@@ -322,6 +322,8 @@ route("PATCH", "/me", (ctx) => {
   const user = ctx.db.users.find((u) => u.id === ctx.userId)!;
   if (typeof ctx.body.name === "string") user.name = ctx.body.name.trim();
   if (["en", "sw", "fr"].includes(ctx.body.preferred_locale as string)) user.preferred_locale = ctx.body.preferred_locale as T.Locale;
+  if (typeof ctx.body.phone === "string") user.phone = ctx.body.phone;
+  if ("email" in ctx.body) user.email = typeof ctx.body.email === "string" && ctx.body.email.trim() ? ctx.body.email.trim().toLowerCase() : null;
   return user;
 }, { org: false });
 
