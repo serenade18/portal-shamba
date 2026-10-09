@@ -429,6 +429,7 @@ function You() {
     },
   });
   const errors = fieldErrors(save.error);
+  const resendLink = useMutation({ mutationFn: api.me.resendConfirmation });
   const displayName = name.trim() || user?.name || formatPhone(user?.phone);
   return (
     <div className="stack-lg">
@@ -460,8 +461,20 @@ function You() {
               options={[{ value: "sw", label: "Kiswahili" }, { value: "en", label: "English" }, { value: "fr", label: "Français" }]}
             />
             <TextField label={t("auth.phone")} type="tel" value={phone} onChange={setPhone} autoComplete="tel" error={errors.phone} />
-            <TextField label={t("auth.email")} type="email" value={email} onChange={setEmail} autoComplete="email" error={errors.email} optional />
+            <TextField
+              label={t("auth.email")} type="email" value={email} onChange={setEmail} autoComplete="email" error={errors.email} optional
+              hint={user?.email && user.email_verified === false && email.trim().toLowerCase() === user.email ? t("settings.emailUnconfirmed") : undefined}
+            />
           </div>
+          {user?.email && user.email_verified === false && (
+            <div>
+              {resendLink.isSuccess ? (
+                <p className="small muted" role="status">{t("auth.linkResent")}</p>
+              ) : (
+                <Button variant="quiet" size="sm" className="flush" loading={resendLink.isPending} onClick={() => resendLink.mutate()}>{t("auth.resendLink")}</Button>
+              )}
+            </div>
+          )}
           <p className="small muted">{t("settings.contactHelp")}</p>
           <FormError message={save.error ? errorText(save.error) : null} />
           <div className="row" style={{ justifyContent: "flex-end" }}>

@@ -49,6 +49,8 @@ export interface User {
   is_staff?: boolean;
   /** False for people who only ever signed in with SMS codes: they set a first password. */
   has_password?: boolean;
+  /** Whether the person opened the link sent to their email. */
+  email_verified?: boolean;
 }
 
 export interface MembershipSummary {
@@ -67,6 +69,19 @@ export interface SignInResponse {
   device_id: string;
   user: User;
   memberships: MembershipSummary[];
+}
+
+/** POST /auth/register: the account starts when the emailed link is opened. */
+export interface AwaitingConfirmation {
+  email: string;
+  awaiting_confirmation: true;
+}
+
+/** POST /auth/email/confirm when the link doesn't start a session (already used, or a changed email). */
+export interface EmailConfirmed {
+  email: string;
+  email_verified: true;
+  activated: boolean;
 }
 
 /** A staff member's read-only "view as farmer" session (POST /staff/farmers/{id}/impersonate). */

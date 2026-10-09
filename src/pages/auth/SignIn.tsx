@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { MailCheck } from "lucide-react";
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
-import { MOCK_MODE } from "@/api/client";
+import { ApiError, MOCK_MODE } from "@/api/client";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useErrorText } from "@/api/hooks";
 import type { SignInResponse } from "@/api/types";
@@ -17,7 +17,7 @@ import { useUi } from "@/stores/ui";
 import { PasswordField } from "./PasswordField";
 import { SplitLayout } from "./SplitLayout";
 
-type Mode = "signin" | "register" | "forgot" | "sent";
+type Mode = "signin" | "register" | "forgot" | "sent" | "confirm";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME = /^[a-z0-9._]{3,30}$/i;
@@ -67,11 +67,16 @@ export function SignIn() {
   };
 
   const login = useMutation({ mutationFn: () => api.auth.login(identifier.trim(), password, installId), onSuccess: done });
+  const [pendingEmail, setPendingEmail] = useState("");
   const register = useMutation({
     mutationFn: () => api.auth.register({ ...reg, name: reg.name.trim(), email: reg.email.trim(), username: reg.username.trim(), phone: normalizePhone(reg.phone) ?? reg.phone, locale }, installId),
-    onSuccess: done,
+    // The account starts when the emailed link is opened (the demo mock signs in at once).
+    onSuccess: (res) => ("access" in res ? done(res) : (setPendingEmail(res.email), setMode("confirm"))),
     onError: (e) => setErrors(fieldErrors(e)),
   });
+  const resend = useMutation({ mutationFn: (email: string) => api.auth.resendConfirmation(email) });
+  const unconfirmed = login.error instanceof ApiError && login.error.code === "auth.email_unconfirmed"
+    ? String(login.error.body.params.email ?? "") : null;
   const forgot = useMutation({ mutationFn: () => api.auth.forgotPassword(reg.email.trim(), locale), onSuccess: () => setMode("sent") });
 
   if (staffSignedIn) return <Navigate to="/admin" replace />;
@@ -82,6 +87,7 @@ export function SignIn() {
     login.reset();
     register.reset();
     forgot.reset();
+    resend.reset();
     setMode(m);
   };
   const set = (k: keyof typeof reg) => (v: string) => setReg((r) => ({ ...r, [k]: v }));
@@ -135,6 +141,17 @@ export function SignIn() {
             </div>
           </div>
           <FormError message={login.error ? errorText(login.error) : null} />
+          {unconfirmed !== null && (
+            <div>
+              {resend.isSuccess ? (
+                <p className="small muted" role="status">{t("auth.linkResent")}</p>
+              ) : (
+                <Button variant="quiet" size="sm" className="flush" loading={resend.isPending} onClick={() => resend.mutate(unconfirmed)}>
+                  {t("auth.resendLink")}
+                </Button>
+              )}
+            </div>
+          )}
           <Button type="submit" variant="primary" block loading={login.isPending}>{t("auth.signIn")}</Button>
           {MOCK_MODE === "all" && <Notice tone="info">{t("auth.demoHint")}</Notice>}
           <p className="auth-switch">
@@ -169,6 +186,19 @@ export function SignIn() {
           <Button type="submit" variant="primary" block loading={forgot.isPending}>{t("auth.sendLink")}</Button>
           <Button variant="quiet" onClick={() => go("signin")}>{t("auth.backToSignIn")}</Button>
         </form>
+      )}
+
+      {mode === "confirm" && (
+        <div className="stack-lg" role="status">
+          <MailCheck size={40} className="ink-health" aria-hidden />
+          <Heading title={t("auth.checkEmail")} help={t("auth.confirmSent", { email: pendingEmail })} />
+          {resend.isSuccess ? (
+            <p className="small muted">{t("auth.linkResent")}</p>
+          ) : (
+            <Button variant="secondary" block loading={resend.isPending} onClick={() => resend.mutate(pendingEmail)}>{t("auth.resendLink")}</Button>
+          )}
+          <Button variant="quiet" onClick={() => go("signin")}>{t("auth.backToSignIn")}</Button>
+        </div>
       )}
 
       {mode === "sent" && (

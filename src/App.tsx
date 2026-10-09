@@ -16,6 +16,7 @@ import { AdminFarmers } from "./pages/admin/AdminFarmers";
 import { AdminKeys } from "./pages/admin/AdminKeys";
 import { AdminEmail } from "./pages/admin/AdminEmail";
 import { AdminEmails } from "./pages/admin/AdminEmails";
+import { ConfirmEmail } from "./pages/auth/ConfirmEmail";
 import { ResetPassword } from "./pages/auth/ResetPassword";
 import { SignIn } from "./pages/auth/SignIn";
 import { FarmSetup } from "./pages/auth/FarmSetup";
@@ -91,6 +92,7 @@ function RequireSetup() {
 const router = createBrowserRouter([
   { path: "/sign-in", element: <SignIn /> },
   { path: "/reset-password", element: <ResetPassword /> },
+  { path: "/confirm-email", element: <ConfirmEmail /> },
   // One sign-in for everyone: staff land in /admin, farmers in their farm (pages/auth/SignIn).
   // Staff keep a separate session (stores/adminSession). The old staff address still works.
   { path: "/admin/sign-in", element: <Navigate to="/sign-in" replace /> },

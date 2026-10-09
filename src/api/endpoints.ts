@@ -9,8 +9,13 @@ export const auth = {
   /** The portal signs in with email or username and a password; the Flutter app keeps phone codes. */
   login: (identifier: string, password: string, installId: string) =>
     http.post<T.SignInResponse>("/auth/login", { identifier, password, device: device(installId) }, { auth: false, org: false }),
+  /** The backend answers with AwaitingConfirmation; the demo mock signs in straight away. */
   register: (body: T.RegisterInput, installId: string) =>
-    http.post<T.SignInResponse>("/auth/register", { ...body, device: device(installId) }, { auth: false, org: false }),
+    http.post<T.AwaitingConfirmation | T.SignInResponse>("/auth/register", { ...body, device: device(installId) }, { auth: false, org: false }),
+  /** Opening the emailed link: the first time it starts the account and signs in. */
+  confirmEmail: (token: string, installId: string) =>
+    http.post<T.SignInResponse | T.EmailConfirmed>("/auth/email/confirm", { token, device: device(installId) }, { auth: false, org: false }),
+  resendConfirmation: (email: string) => http.post<void>("/auth/email/resend", { email }, { auth: false, org: false }),
   forgotPassword: (email: string, locale: T.Locale) =>
     http.post<void>("/auth/password/forgot", { email, locale }, { auth: false, org: false }),
   resetPassword: (uid: string, token: string, password: string) =>
@@ -30,6 +35,7 @@ export const me = {
   /** Erases the account. Refused (409 account.last_owner) while they are the last owner of a farm account others use. */
   deleteAccount: () => api<void>("DELETE", "/me", { body: { confirm: true }, org: false }),
   changePassword: (body: { current_password: string; new_password: string }) => http.post<void>("/me/password", body, { org: false }),
+  resendConfirmation: () => http.post<void>("/me/email/confirm", undefined, { org: false }),
 };
 
 export const org = {
