@@ -1504,7 +1504,18 @@ route("GET", "/dashboard", (ctx) => {
   const today = isoDate(new Date());
   const picks = d.picks[farmId] ?? [];
   let receivables: T.Dashboard["receivables"] = null;
+  let stockBought: T.Dashboard["stock_bought"] = null;
+  let payables: T.Dashboard["payables"] = null;
   if (can(ctx, "money.read")) {
+    const bought = d.purchases.filter((p) => p.farm_id === farmId && p.date >= from && p.date <= to);
+    const total = bought.reduce((s, p) => s + p.total, 0);
+    const paid = bought.reduce((s, p) => s + Math.min(p.paid, p.total), 0);
+    stockBought = { total: money(total), paid: money(paid), owed: money(total - paid), purchases: bought.length };
+    const unpaid = d.purchases.filter((p) => p.farm_id === farmId && p.total - p.paid > 0.001).sort((a, b) => a.date.localeCompare(b.date));
+    payables = {
+      total: money(unpaid.reduce((s, p) => s + p.total - p.paid, 0)), suppliers: new Set(unpaid.map((p) => p.supplier_id)).size,
+      oldest_days: unpaid[0] ? daysBetween(unpaid[0].date, today) : null, oldest_supplier: d.suppliers.find((x) => x.id === unpaid[0]?.supplier_id)?.name ?? null,
+    };
     settleSales(ctx);
     const per = d.customers.map((c) => ({ c, ...debtAge(d.sales.filter((s) => s.customer_id === c.id && s.farm_id === farmId).map((s) => ({ date: s.date, balance: s.total - s.paid }))) })).filter((x) => x.balance > 0.001);
     const oldest = per.slice().sort((a, b) => (b.oldest ?? 0) - (a.oldest ?? 0))[0];
@@ -1528,6 +1539,8 @@ route("GET", "/dashboard", (ctx) => {
     farm_id: farmId, from, to,
     profit: can(ctx, "money.read") ? profitReport(ctx, farmId, from, to) : null,
     receivables,
+    stock_bought: stockBought,
+    payables,
     alerts: alertsFor(ctx, farmId).filter((a) => a.status === "open" && (!a.money || can(ctx, "money.read"))),
     today: todayRecords,
     stock: balanceRows(ctx, farmId),
