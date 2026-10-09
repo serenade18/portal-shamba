@@ -670,9 +670,6 @@
   font-size: var(--fs-title);
   flex-shrink: 0;
 }
-.panel-fill {
-  height: 100%;
-}
 .avatar {
   display: inline-flex;
   align-items: center;

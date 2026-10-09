@@ -47,6 +47,8 @@ export interface User {
   date_joined: string;
   /** Shamba OS staff: they use the admin area, not a farm account. */
   is_staff?: boolean;
+  /** False for people who only ever signed in with SMS codes: they set a first password. */
+  has_password?: boolean;
 }
 
 export interface MembershipSummary {

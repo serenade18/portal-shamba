@@ -29,6 +29,7 @@ export const me = {
   exportData: () => http.get<Record<string, unknown>>("/me/export", undefined, { org: false }),
   /** Erases the account. Refused (409 account.last_owner) while they are the last owner of a farm account others use. */
   deleteAccount: () => api<void>("DELETE", "/me", { body: { confirm: true }, org: false }),
+  changePassword: (body: { current_password: string; new_password: string }) => http.post<void>("/me/password", body, { org: false }),
 };
 
 export const org = {

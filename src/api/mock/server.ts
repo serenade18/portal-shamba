@@ -318,6 +318,8 @@ route("POST", "/auth/token/refresh", (ctx) => {
 route("POST", "/auth/logout", () => undefined, { org: false });
 
 route("GET", "/me", (ctx) => ctx.db.users.find((u) => u.id === ctx.userId), { org: false });
+route("POST", "/me/password", () => null, { org: false });
+
 route("PATCH", "/me", (ctx) => {
   const user = ctx.db.users.find((u) => u.id === ctx.userId)!;
   if (typeof ctx.body.name === "string") user.name = ctx.body.name.trim();

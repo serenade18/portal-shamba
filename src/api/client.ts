@@ -11,7 +11,7 @@ export const MOCK_MODE = (import.meta.env.VITE_MOCK ?? "none") as MockMode;
 const IMPLEMENTED = [
   /^\/health$/,
   /^\/auth\//, // phone codes, token refresh, logout, and the portal's password sign-in, sign-up and reset
-  /^\/me(\/export)?$/,
+  /^\/me(\/(export|password))?$/,
   /^\/me\/organisations$/,
   /^\/me\/invitations\/[^/]+\/accept$/,
   /^\/organisation$/,

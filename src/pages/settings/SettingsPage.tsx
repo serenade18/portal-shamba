@@ -20,6 +20,7 @@ import { useCan, useMembership, useSession } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useUi } from "@/stores/ui";
 import { BoundaryEditor, FarmForm } from "../../pages/auth/FarmSetup";
+import { PasswordField } from "../auth/PasswordField";
 import { PlotsSettings, StructuresSettings } from "../farm/LandSettings";
 import { useInvalidateOrg } from "../enterprise/forms";
 import { TypeTiles } from "../onboarding/TypeTiles";
@@ -296,6 +297,58 @@ function Members() {
   );
 }
 
+/** Change your password, or set a first one if you only ever signed in with SMS codes. */
+function ChangePassword() {
+  const t = useT();
+  const errorText = useErrorText();
+  const user = useSession((s) => s.user);
+  const setUser = useSession((s) => s.setUser);
+  const hasPassword = user?.has_password !== false;
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [again, setAgain] = useState("");
+  const [mismatch, setMismatch] = useState(false);
+  const change = useMutation({
+    mutationFn: () => api.me.changePassword({ current_password: current, new_password: next }),
+    onSuccess: () => {
+      setCurrent("");
+      setNext("");
+      setAgain("");
+      if (user && !hasPassword) setUser({ ...user, has_password: true });
+      toast(t("settings.passwordChanged"));
+    },
+  });
+  const errors = fieldErrors(change.error);
+  return (
+    <Panel title={hasPassword ? t("settings.passwordTitle") : t("settings.passwordSetTitle")}>
+      <form
+        className="stack"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          const differ = next !== again;
+          setMismatch(differ);
+          if (!differ) change.mutate();
+        }}
+      >
+        {!hasPassword && <p className="small muted">{t("settings.passwordSetHelp")}</p>}
+        {hasPassword && (
+          <PasswordField label={t("settings.currentPassword")} value={current} onChange={setCurrent} autoComplete="current-password" error={errors.current_password} />
+        )}
+        <PasswordField label={t("auth.newPassword")} hint={t("auth.passwordHint")} value={next} onChange={setNext} autoComplete="new-password" error={errors.new_password} />
+        <PasswordField label={t("settings.confirmPassword")} value={again} onChange={setAgain} autoComplete="new-password" error={mismatch ? t("settings.passwordMismatch") : undefined} />
+        <p className="small muted">{t("settings.passwordSignsOut")}</p>
+        <FormError message={change.error && !errors.current_password && !errors.new_password ? errorText(change.error) : null} />
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <Button type="submit" variant="primary" loading={change.isPending} disabled={!next || !again || (hasPassword && !current)}>
+            {hasPassword ? t("settings.changePassword") : t("settings.setPassword")}
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
 /** A copy of everything kept about you, and erasing your account (NFR-11). */
 function YourData() {
   const t = useT();
@@ -314,7 +367,7 @@ function YourData() {
   const erase = useMutation({ mutationFn: api.me.deleteAccount, onSuccess: () => (toast(t("account.deleted")), signOut()) });
   return (
     <>
-      <Panel title={t("account.dataTitle")} className="panel-fill">
+      <Panel title={t("account.dataTitle")}>
         <div className="stack">
           <p className="small muted">{t("account.dataHelp")}</p>
           <FormError message={download.error ? errorText(download.error) : null} />
@@ -323,7 +376,7 @@ function YourData() {
           </div>
         </div>
       </Panel>
-      <Panel title={t("account.deleteTitle")} className="panel-fill">
+      <Panel title={t("account.deleteTitle")}>
         <div className="stack">
           <p className="small muted">{t("account.deleteHelp")}</p>
           <div>
@@ -419,7 +472,10 @@ function You() {
         </form>
       </Panel>
       <div className="grid-2">
-        <YourData />
+        <ChangePassword />
+        <div className="stack-lg">
+          <YourData />
+        </div>
       </div>
     </div>
   );
