@@ -25,7 +25,7 @@ const IMPLEMENTED = [
   /^\/weather$/,
   /^\/alerts(\/[0-9a-f-]{36}\/seen)?$/,
   /^\/dashboard$/,
-  /^\/items(\/[0-9a-f-]{36})?$/,
+  /^\/items(\/([0-9a-f-]{36}|suggestions))?$/,
   /^\/enterprises(\/[0-9a-f-]{36}(\/(records|health|production|close-summary|close))?)?$/,
   /^\/animals(\/[0-9a-f-]{36}(\/(exit|breeding|births|weights))?)?$/,
   /^\/(milk-records|feeding-records|treatments)$/,

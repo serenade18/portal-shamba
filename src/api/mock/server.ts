@@ -1000,11 +1000,39 @@ route("POST", "/seasons/:id/harvests", (ctx) => {
 /* ---------- Stock ---------- */
 
 route("GET", "/items", (ctx) => paginate(data(ctx).items, ctx.q, 200));
+// The demo farm already has its items, so there's nothing left to suggest.
+route("GET", "/items/suggestions", () => ({ results: [] }));
+route("POST", "/items", (ctx) => {
+  need(ctx, "stock.write");
+  const b = ctx.body as { name?: string; category?: T.ItemCategory; base_unit?: string; packs?: { code: string; factor: string }[]; low_stock_level?: string | null };
+  const name = String(b.name ?? "").trim();
+  if (!name) throw new MockError(400, "validation_error", "Some fields are not valid.", { name: ["Give the item a name."] });
+  const base = b.base_unit || "kg";
+  const units = [{ code: base, factor: 1 }, ...(b.packs ?? []).map((p) => ({ code: p.code, factor: Number(p.factor) }))];
+  const it: T.Item = { id: crypto.randomUUID(), name: { en: name, sw: name, fr: name }, kind: "input", category: b.category ?? "other", produced_by: [],
+    base_unit: base, display_unit: units[units.length - 1]!.code, units, low_stock_level: b.low_stock_level ?? null, custom: true, removable: true };
+  data(ctx).items.push(it);
+  return it;
+}, { status: 201 });
 route("PATCH", "/items/:id", (ctx) => {
   need(ctx, "stock.write");
   const it = cmd.item(data(ctx), ctx.params.id);
-  it.low_stock_level = ctx.body.low_stock_level ? String(Number(ctx.body.low_stock_level)) : null;
+  const b = ctx.body as { name?: string; category?: T.ItemCategory; packs?: { code: string; factor: string }[]; low_stock_level?: string | null };
+  if ("low_stock_level" in b) it.low_stock_level = b.low_stock_level ? String(Number(b.low_stock_level)) : null;
+  if (it.kind === "input") {
+    if (b.name?.trim()) it.name = { en: b.name.trim(), sw: b.name.trim(), fr: b.name.trim() };
+    if (b.category) it.category = b.category;
+    if (b.packs) it.units = [{ code: it.base_unit, factor: 1 }, ...b.packs.map((p) => ({ code: p.code, factor: Number(p.factor) }))];
+  }
   return it;
+});
+route("DELETE", "/items/:id", (ctx) => {
+  need(ctx, "stock.write");
+  const d = data(ctx);
+  const it = cmd.item(d, ctx.params.id);
+  if (it.kind !== "input") throw new MockError(400, "item.not_removable", "This is what the farm produces. It can't be removed.");
+  d.items = d.items.filter((x) => x.id !== it.id);
+  return { result: "deleted" };
 });
 
 function balanceRows(ctx: Ctx, farmId: string): T.StockBalance[] {

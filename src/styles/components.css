@@ -657,6 +657,15 @@
   margin: 0;
 }
 
+.pack-row {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-end;
+}
+.pack-row .field {
+  flex: 1;
+  min-width: 0;
+}
 .profile-head {
   display: flex;
   align-items: center;

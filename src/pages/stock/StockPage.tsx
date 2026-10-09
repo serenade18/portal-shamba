@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRightLeft, BellRing, ClipboardList, Plus } from "lucide-react";
+import { ArrowRightLeft, BellRing, ClipboardList, PackagePlus, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useEnterprises, useErrorText, useFarmId, useItems, useKey, usePaged } from "@/api/hooks";
-import type { StockBalance } from "@/api/types";
+import type { Item, StockBalance } from "@/api/types";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Money, PageHead, Table, Tabs, useTabParam, type Column } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, SkeletonRows } from "@/components/ui/feedback";
@@ -14,6 +14,7 @@ import { formatNumber, today } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useInvalidateOrg } from "../enterprise/forms";
+import { ItemPanel } from "./ItemPanel";
 import { MovementsTable } from "./MovementsTable";
 
 const display = (b: StockBalance) => Number(b.qty_base) / b.display_factor;
@@ -46,11 +47,13 @@ function AlertLevelDialog({ balance, onClose }: { balance: StockBalance; onClose
   );
 }
 
-function Balances({ rows, onAlert }: { rows: StockBalance[]; onAlert: (b: StockBalance) => void }) {
+function Balances({ rows, onAlert, onEdit }: { rows: StockBalance[]; onAlert: (b: StockBalance) => void; onEdit: (i: Item) => void }) {
   const t = useT();
   const qty = useQty();
   const money = useCan("money.read");
   const canWrite = useCan("stock.write");
+  const items = useItems();
+  const itemFor = (b: StockBalance) => items.data?.find((i) => i.id === b.item_id);
   if (!rows.length) return <div className="panel"><EmptyState text={t("stock.empty")} action={money && <ButtonLink to="/purchases?new=1" variant="primary">{t("stock.recordPurchase")}</ButtonLink>} /></div>;
   const columns: Column<StockBalance>[] = [
     {
@@ -92,6 +95,16 @@ function Balances({ rows, onAlert }: { rows: StockBalance[]; onAlert: (b: StockB
               {b.low_stock_level ? qty(Number(b.low_stock_level) / b.display_factor, b.display_unit) : "–"}
             </Button>
           ),
+        }, {
+          key: "edit",
+          header: "",
+          label: t("stock.editItem"),
+          render: (b: StockBalance) => {
+            const item = itemFor(b);
+            return item?.kind === "input" ? (
+              <Button variant="quiet" size="sm" icon={<Pencil size={14} aria-hidden />} aria-label={t("item.editTitle", { name: b.item_name[t.locale] })} onClick={() => onEdit(item)} />
+            ) : null;
+          },
         }]
       : []),
   ];
@@ -214,7 +227,8 @@ export function StockPage() {
   const canWrite = useCan("stock.write");
   const money = useCan("money.read");
   const [tab, setTab] = useTabParam(["balances", "history"] as const, "balances");
-  const [panel, setPanel] = useState<"count" | "transfer" | null>(null);
+  const [panel, setPanel] = useState<"count" | "transfer" | "item" | null>(null);
+  const [editing, setEditing] = useState<Item | null>(null);
   const [alertFor, setAlertFor] = useState<StockBalance | null>(null);
   const balances = useQuery({ queryKey: key("balances", farmId), queryFn: () => api.stock.balances(farmId), enabled: !!farmId, select: (p) => p.results });
 
@@ -225,6 +239,7 @@ export function StockPage() {
         actions={canWrite && (
           <>
             {money && <ButtonLink to="/purchases?new=1" variant="primary" icon={<Plus size={18} />}>{t("stock.recordPurchase")}</ButtonLink>}
+            <Button icon={<PackagePlus size={18} />} onClick={() => setPanel("item")}>{t("stock.addItem")}</Button>
             <Button icon={<ClipboardList size={18} />} onClick={() => setPanel("count")}>{t("stock.count")}</Button>
             <Button icon={<ArrowRightLeft size={18} />} onClick={() => setPanel("transfer")}>{t("stock.transfer")}</Button>
           </>
@@ -240,12 +255,14 @@ export function StockPage() {
         ]}
       />
       {tab === "balances" ? (
-        balances.isLoading ? <SkeletonRows /> : balances.error ? <ErrorState error={balances.error} onRetry={() => balances.refetch()} /> : <Balances rows={balances.data ?? []} onAlert={setAlertFor} />
+        balances.isLoading ? <SkeletonRows /> : balances.error ? <ErrorState error={balances.error} onRetry={() => balances.refetch()} /> : <Balances rows={balances.data ?? []} onAlert={setAlertFor} onEdit={setEditing} />
       ) : (
         <History />
       )}
       {panel === "count" && <CountPanel rows={balances.data ?? []} onClose={() => setPanel(null)} />}
       {panel === "transfer" && <TransferPanel onClose={() => setPanel(null)} />}
+      {panel === "item" && <ItemPanel onClose={() => setPanel(null)} />}
+      {editing && <ItemPanel item={editing} onClose={() => setEditing(null)} />}
       {alertFor && <AlertLevelDialog balance={alertFor} onClose={() => setAlertFor(null)} />}
     </>
   );

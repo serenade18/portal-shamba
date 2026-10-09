@@ -142,7 +142,11 @@ export const crops = {
 
 export const stock = {
   items: () => http.get<T.Page<T.Item>>("/items"),
-  updateItem: (id: string, body: { low_stock_level: string | null }) => http.patch<T.Item>(`/items/${id}`, body),
+  itemSuggestions: () => http.get<{ results: T.ItemSuggestion[] }>("/items/suggestions"),
+  createItem: (body: T.NewItemInput) => http.post<T.Item>("/items", body),
+  updateItem: (id: string, body: Partial<Omit<T.NewItemInput, "suggestion" | "base_unit">> & { display_unit?: string }) =>
+    http.patch<T.Item>(`/items/${id}`, body),
+  removeItem: (id: string) => http.del<{ result: "archived" | "deleted" }>(`/items/${id}`),
   balances: (farmId: string) => http.get<T.Page<T.StockBalance>>("/stock/balances", { farm_id: farmId }),
   movements: (q: Q) => http.get<T.Page<T.StockMovement>>("/stock/movements", q),
   reverse: (id: string) => http.post<T.StockMovement>(`/stock/movements/${id}/reverse`),

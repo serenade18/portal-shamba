@@ -473,7 +473,7 @@ export interface UnitOption {
   factor: number; // how many base units in one of this unit
 }
 
-export type ItemCategory = "produce" | "feed" | "drug" | "seed" | "fertiliser" | "chemical";
+export type ItemCategory = "produce" | "feed" | "drug" | "seed" | "fertiliser" | "chemical" | "other";
 
 export interface Item {
   id: string;
@@ -486,6 +486,29 @@ export interface Item {
   display_unit: string;
   units: UnitOption[];
   low_stock_level: string | null;
+  /** Added by the farmer under their own name (not from the suggestions). */
+  custom?: boolean;
+  /** Inputs can be removed; what the farm produces can't. */
+  removable?: boolean;
+}
+
+/** An input farms like this one usually keep (GET /items/suggestions). */
+export interface ItemSuggestion {
+  code: string;
+  name: Record<Locale, string>;
+  category: ItemCategory;
+  base_unit: string;
+  display_unit: string;
+  units: UnitOption[];
+}
+
+export interface NewItemInput {
+  suggestion?: string;
+  name?: string;
+  category?: ItemCategory;
+  base_unit?: string;
+  packs?: { code: string; factor: string }[];
+  low_stock_level?: string | null;
 }
 
 export interface StockBalance {
