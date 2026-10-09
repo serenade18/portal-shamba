@@ -743,6 +743,59 @@ export interface StaffLand {
 }
 
 /** One farmer in full (GET /staff/farmers/{id}). */
+/* ---------- Staff email to farmers (/staff/emails) ---------- */
+
+export type EmailAudience = "all" | "owners" | "selected";
+export type StaffEmailStatus = "draft" | "sending" | "sent";
+
+export interface StaffEmailPerson {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string;
+}
+
+export interface StaffEmail {
+  id: string;
+  subject: string;
+  heading: string;
+  audience: EmailAudience;
+  status: StaffEmailStatus;
+  created_at: string;
+  updated_at: string;
+  sent_at: string | null;
+  created_by: StaffEmailPerson | null;
+  sent_by: StaffEmailPerson | null;
+  counts: { total: number; sent: number; failed: number; queued: number };
+  /** Chosen farmers (audience "selected"). */
+  recipient_count: number;
+}
+
+export interface StaffEmailDetail extends StaffEmail {
+  body: string;
+  button_label: string;
+  button_url: string;
+  recipients: StaffEmailPerson[];
+  failures: { email: string; error: string }[];
+}
+
+export interface StaffEmailInput {
+  subject: string;
+  heading: string;
+  /** {name} becomes each farmer's first name; blank lines start paragraphs. */
+  body: string;
+  button_label: string;
+  button_url: string;
+  audience: EmailAudience;
+  recipient_ids: string[];
+}
+
+export interface StaffEmailAudienceCount {
+  farmers: number;
+  with_email: number;
+  without_email: number;
+}
+
 export interface StaffFarmerDetail {
   id: string;
   name: string;

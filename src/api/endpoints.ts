@@ -212,6 +212,19 @@ export const staff = {
   revealKey: (name: T.KeyName) => http.post<{ name: T.KeyName; value: string }>(`/staff/keys/${name}/reveal`, undefined, { as: "admin", org: false }),
   /** Forget the value saved here, so the server's environment applies again. */
   resetKey: (name: T.KeyName) => http.del<T.ManagedKey>(`/staff/keys/${name}`, { as: "admin", org: false }),
+  /** Email to farmers: drafts, preview, test, send (apps/broadcasts). */
+  emails: (cursor?: string) => http.get<T.Page<T.StaffEmail>>("/staff/emails", { cursor }, { as: "admin", org: false }),
+  email: (id: string) => http.get<T.StaffEmailDetail>(`/staff/emails/${id}`, undefined, { as: "admin", org: false }),
+  createEmail: (body: T.StaffEmailInput) => http.post<T.StaffEmailDetail>("/staff/emails", body, { as: "admin", org: false }),
+  updateEmail: (id: string, body: T.StaffEmailInput) => http.patch<T.StaffEmailDetail>(`/staff/emails/${id}`, body, { as: "admin", org: false }),
+  deleteEmail: (id: string) => http.del(`/staff/emails/${id}`, { as: "admin", org: false }),
+  previewEmail: (body: T.StaffEmailInput) =>
+    http.post<{ subject: string; text: string; html: string }>("/staff/emails/preview", body, { as: "admin", org: false }),
+  /** How many farmers "all" or "owners" reaches. Chosen farmers are counted in the browser. */
+  emailAudience: (audience: Exclude<T.EmailAudience, "selected">) =>
+    http.get<T.StaffEmailAudienceCount>("/staff/emails/audience", { audience }, { as: "admin", org: false }),
+  testEmail: (id: string) => http.post<{ to: string }>(`/staff/emails/${id}/test`, undefined, { as: "admin", org: false }),
+  sendEmail: (id: string) => http.post<T.StaffEmailDetail>(`/staff/emails/${id}/send`, undefined, { as: "admin", org: false }),
 };
 
 /** Settings any browser may see, signed in or not. */

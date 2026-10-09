@@ -14,6 +14,8 @@ import { AdminSignUp } from "./pages/admin/AdminSignUp";
 import { AdminFarmer } from "./pages/admin/AdminFarmer";
 import { AdminFarmers } from "./pages/admin/AdminFarmers";
 import { AdminKeys } from "./pages/admin/AdminKeys";
+import { AdminEmail } from "./pages/admin/AdminEmail";
+import { AdminEmails } from "./pages/admin/AdminEmails";
 import { ResetPassword } from "./pages/auth/ResetPassword";
 import { SignIn } from "./pages/auth/SignIn";
 import { FarmSetup } from "./pages/auth/FarmSetup";
@@ -97,7 +99,7 @@ const router = createBrowserRouter([
   {
     path: "/admin",
     element: <RequireAdmin />,
-    children: [{ element: <AdminLayout />, children: [{ index: true, element: <AdminDashboard /> }, { path: "farmers", element: <AdminFarmers /> }, { path: "farmers/:id", element: <AdminFarmer /> }, { path: "keys", element: <AdminKeys /> }] }],
+    children: [{ element: <AdminLayout />, children: [{ index: true, element: <AdminDashboard /> }, { path: "farmers", element: <AdminFarmers /> }, { path: "farmers/:id", element: <AdminFarmer /> }, { path: "emails", element: <AdminEmails /> }, { path: "emails/new", element: <AdminEmail /> }, { path: "emails/:id", element: <AdminEmail /> }, { path: "keys", element: <AdminKeys /> }] }],
   },
   {
     element: <RequireAuth />,

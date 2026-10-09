@@ -214,7 +214,8 @@ function signedIn(db: MockDb, user: MUser, isNew: boolean) {
     db.memberships.push({ id: crypto.randomUUID(), user_id: user.id, org_id: inv.org_id, role: inv.role, is_active: true, epoch: 1, created_at: new Date().toISOString(), removed_at: null });
   }
   const deviceId = crypto.randomUUID();
-  return { ...issue(user.id, deviceId), is_new_user: isNew, device_id: deviceId, user, memberships: membershipsPayload(db, user.id) };
+  // Like Django's /auth/login: the user says whether they are staff, so the sign-in page sends them to /admin.
+  return { ...issue(user.id, deviceId), is_new_user: isNew, device_id: deviceId, user: { ...user, is_staff: db.staff.includes(user.id) }, memberships: membershipsPayload(db, user.id) };
 }
 
 route("POST", "/auth/login", (ctx) => {
@@ -2134,3 +2135,134 @@ route("POST", "/sales/:id/receipt", (ctx) => {
   if (!whatsapp) console.info(`[mock sms] to ${phone}:\n${text}`);
   return { channel: whatsapp ? "whatsapp" : "sms", phone, text, url: whatsapp ? `https://wa.me/${phone.replace(/^\+/, "")}?text=${encodeURIComponent(text)}` : null } satisfies T.Receipt;
 });
+
+/* ---------- Staff email to farmers (apps/broadcasts). In memory: not saved across reloads. ---------- */
+
+interface MEmail extends Omit<T.StaffEmailDetail, "recipients" | "created_by" | "sent_by"> {
+  recipient_ids: string[];
+  created_by_id: string;
+  sent_by_id: string | null;
+}
+const mockEmails: MEmail[] = [];
+
+function needStaff(ctx: Ctx) {
+  if (!ctx.db.staff.includes(ctx.userId ?? "")) throw new MockError(403, "permission_denied", "You do not have permission to do this.");
+}
+
+const emailPerson = (ctx: Ctx, id: string | null): T.StaffEmailPerson | null => {
+  const u = ctx.db.users.find((x) => x.id === id);
+  return u ? { id: u.id, name: u.name, email: u.email, phone: u.phone } : null;
+};
+
+function emailOut(ctx: Ctx, e: MEmail): T.StaffEmailDetail {
+  const { recipient_ids, created_by_id, sent_by_id, ...rest } = e;
+  return {
+    ...rest, recipient_count: recipient_ids.length, created_by: emailPerson(ctx, created_by_id), sent_by: emailPerson(ctx, sent_by_id),
+    recipients: recipient_ids.map((id) => emailPerson(ctx, id)).filter((p): p is T.StaffEmailPerson => !!p),
+  };
+}
+
+function emailOf(ctx: Ctx, draftOnly = false): MEmail {
+  needStaff(ctx);
+  const e = mockEmails.find((x) => x.id === ctx.params.id);
+  if (!e) throw new MockError(404, "not_found", "Not found.");
+  if (draftOnly && e.status !== "draft") throw new MockError(400, "broadcast.already_sent", "This email has already been sent.");
+  return e;
+}
+
+function emailInput(ctx: Ctx): T.StaffEmailInput {
+  const b = ctx.body as Partial<T.StaffEmailInput>;
+  const fields: Record<string, string[]> = {};
+  if (!String(b.subject ?? "").trim()) fields.subject = ["Write a subject."];
+  if (!String(b.body ?? "").trim()) fields.body = ["Write the message."];
+  if (String(b.button_label ?? "").trim() && !b.button_url) fields.button_url = ["Add the link the button opens."];
+  if (Object.keys(fields).length) throw new MockError(400, "validation_error", "Check the highlighted fields.", fields);
+  return {
+    subject: String(b.subject).trim(), heading: String(b.heading ?? "").trim(), body: String(b.body).trim(),
+    button_label: String(b.button_label ?? "").trim(), button_url: String(b.button_url ?? "").trim(),
+    audience: b.audience ?? "selected", recipient_ids: b.recipient_ids ?? [],
+  };
+}
+
+function audienceUsers(ctx: Ctx, audience: T.EmailAudience, ids: string[] = []): MUser[] {
+  const farmers = ctx.db.users.filter((u) => !ctx.db.staff.includes(u.id));
+  if (audience === "all") return farmers;
+  if (audience === "owners") return farmers.filter((u) => ctx.db.memberships.some((m) => m.user_id === u.id && m.is_active && m.role === "owner"));
+  return farmers.filter((u) => ids.includes(u.id));
+}
+
+/** A stand-in for the server's email (apps/broadcasts/templates/emails/broadcast.html). */
+function emailHtml(input: T.StaffEmailInput, name: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const paragraphs = input.body.replace(/\{name\}/g, name).replace(/[ \t]+([,.!?])/g, "$1").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const font = "font-family:Figtree,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(input.subject)}</title></head>
+<body style="margin:0;background:#f8f7f2;${font}"><table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 12px">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+<tr><td style="background:linear-gradient(160deg,#1f382c,#4f765b);border-radius:16px 16px 0 0;padding:28px 36px">
+<table cellpadding="0" cellspacing="0"><tr><td style="padding-right:14px"><img src="/brand/icon-192.png" width="44" height="44" alt="" style="display:block;border-radius:50%"></td>
+<td><div style="font-size:24px;font-weight:700;color:#fff">Shamba<span style="color:#87c059">OS</span></div>
+<div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#dce8de;margin-top:8px">Manage. Grow. Thrive.</div></td></tr></table></td></tr>
+<tr><td style="background:#d99a32;height:4px;font-size:0">&nbsp;</td></tr>
+<tr><td style="background:#fff;border-radius:0 0 16px 16px;padding:36px;color:#202722">
+<h1 style="margin:0 0 16px;font-size:22px">${esc(input.heading || input.subject)}</h1>
+${paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6">${esc(p).replace(/\n/g, "<br>")}</p>`).join("")}
+${input.button_url ? `<p style="margin:24px 0"><a href="${esc(input.button_url)}" style="display:inline-block;padding:13px 26px;background:#355442;color:#fff;border-radius:999px;text-decoration:none;font-weight:600">${esc(input.button_label || input.button_url)}</a></p>` : ""}
+</td></tr>
+<tr><td style="padding:24px 12px;text-align:center;font-size:12px;color:#7b817a">You're getting this email from the Shamba OS team because you have a Shamba OS account.<br>&copy; ${new Date().getFullYear()} Shamba OS &middot; shambaos.com</td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+route("GET", "/staff/emails", (ctx) => {
+  needStaff(ctx);
+  return paginate(mockEmails.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)).map((e) => emailOut(ctx, e)), ctx.q, 25);
+}, { org: false });
+route("POST", "/staff/emails", (ctx) => {
+  needStaff(ctx);
+  const now = new Date().toISOString();
+  const e: MEmail = {
+    id: crypto.randomUUID(), ...emailInput(ctx), status: "draft", created_at: now, updated_at: now, sent_at: null,
+    counts: { total: 0, sent: 0, failed: 0, queued: 0 }, recipient_count: 0, failures: [], created_by_id: ctx.userId ?? "", sent_by_id: null,
+  };
+  mockEmails.push(e);
+  return emailOut(ctx, e);
+}, { org: false, status: 201 });
+route("POST", "/staff/emails/preview", (ctx) => {
+  needStaff(ctx);
+  const input = emailInput(ctx);
+  const me = ctx.db.users.find((u) => u.id === ctx.userId);
+  return { subject: input.subject, text: input.body, html: emailHtml(input, me?.name.split(" ")[0] ?? "") };
+}, { org: false });
+route("GET", "/staff/emails/audience", (ctx) => {
+  needStaff(ctx);
+  const users = audienceUsers(ctx, (ctx.q.get("audience") ?? "all") as T.EmailAudience);
+  const withEmail = users.filter((u) => u.email).length;
+  return { farmers: users.length, with_email: withEmail, without_email: users.length - withEmail } satisfies T.StaffEmailAudienceCount;
+}, { org: false });
+route("GET", "/staff/emails/:id", (ctx) => emailOut(ctx, emailOf(ctx)), { org: false });
+route("PATCH", "/staff/emails/:id", (ctx) => {
+  const e = emailOf(ctx, true);
+  Object.assign(e, emailInput(ctx), { updated_at: new Date().toISOString() });
+  return emailOut(ctx, e);
+}, { org: false });
+route("DELETE", "/staff/emails/:id", (ctx) => {
+  const e = emailOf(ctx, true);
+  mockEmails.splice(mockEmails.indexOf(e), 1);
+  return undefined;
+}, { org: false });
+route("POST", "/staff/emails/:id/test", (ctx) => {
+  emailOf(ctx);
+  const me = ctx.db.users.find((u) => u.id === ctx.userId);
+  if (!me?.email) throw new MockError(400, "broadcast.no_staff_email", "Your staff account has no email address.");
+  console.info(`[mock email] test to ${me.email}`);
+  return { to: me.email };
+}, { org: false });
+route("POST", "/staff/emails/:id/send", (ctx) => {
+  const e = emailOf(ctx, true);
+  const to = audienceUsers(ctx, e.audience, e.recipient_ids).filter((u) => u.email);
+  if (!to.length) throw new MockError(400, "broadcast.no_recipients", "Nobody in this audience has an email address.");
+  const now = new Date().toISOString();
+  Object.assign(e, { status: "sent", sent_at: now, updated_at: now, sent_by_id: ctx.userId, counts: { total: to.length, sent: to.length, failed: 0, queued: 0 } });
+  console.info(`[mock email] "${e.subject}" to ${to.map((u) => u.email).join(", ")}`);
+  return emailOut(ctx, e);
+}, { org: false });
