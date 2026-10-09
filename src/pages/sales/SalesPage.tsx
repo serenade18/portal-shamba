@@ -1,10 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus, Share2, Trash2 } from "lucide-react";
+import { MessageSquare, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import * as api from "@/api/endpoints";
-import { fieldErrors, useEnterprises, useErrorText, useFarm, useFarmId, useItems, useKey, usePaged, useRange } from "@/api/hooks";
-import type { NewSaleInput, Party, PaymentMethod, Sale } from "@/api/types";
+import { fieldErrors, useEnterprises, useErrorText, useFarmId, useItems, useKey, usePaged, useRange } from "@/api/hooks";
+import type { NewSaleInput, Party, PaymentMethod, Receipt, ReceiptChannel, Sale } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { Money, PageHead, RecordedBy, Table, Tabs, useCurrency, useTabParam, type Column } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, NoPermission, SkeletonRows } from "@/components/ui/feedback";
@@ -230,16 +230,56 @@ function NewSalePanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function receiptText(t: ReturnType<typeof useT>, farm: string, sale: Sale, currency: string, qty: ReturnType<typeof useQty>) {
-  return t("sale.receipt", {
-    farm,
-    number: sale.number,
-    date: formatDate(sale.date, t.locale),
-    lines: sale.lines.map((l) => `${qty(l.qty, l.unit)} ${l.item_name[t.locale].toLowerCase()} @ ${formatMoney(l.unit_price, currency)}`).join(", "),
-    total: formatMoney(sale.total, currency),
-    paid: formatMoney(sale.paid, currency),
-    balance: formatMoney(sale.balance_due, currency),
+/** Sends the customer a receipt: by SMS from the server, or a WhatsApp link (SAL-05). */
+function ReceiptForm({ saleId, onDone }: { saleId: string; onDone: () => void }) {
+  const t = useT();
+  const errorText = useErrorText();
+  const [channel, setChannel] = useState<ReceiptChannel>("sms");
+  const [phone, setPhone] = useState("");
+  const [sent, setSent] = useState<Receipt | null>(null);
+  const send = useMutation({
+    mutationFn: () => api.sales.sendReceipt(saleId, { channel, phone }),
+    onSuccess: (r) => {
+      if (r.channel === "sms") {
+        toast(t("receipt.sentSms", { phone: formatPhone(r.phone) }));
+        onDone();
+      } else setSent(r);
+    },
   });
+  const err = fieldErrors(send.error);
+  if (sent?.url) {
+    return (
+      <div className="stack panel panel-body">
+        <p className="small muted">{t("receipt.whatsappReady", { phone: formatPhone(sent.phone) })}</p>
+        <pre className="small" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{sent.text}</pre>
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <Button onClick={onDone}>{t("common.close")}</Button>
+          <a className="btn btn-primary" href={sent.url} target="_blank" rel="noreferrer">
+            <MessageSquare size={16} aria-hidden />
+            {t("receipt.openWhatsapp")}
+          </a>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="stack panel panel-body"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        send.mutate();
+      }}
+    >
+      <ChoiceCards<ReceiptChannel> label={t("receipt.channel")} value={channel} onChange={setChannel} options={[{ value: "sms", label: t("receipt.sms") }, { value: "whatsapp", label: "WhatsApp" }]} />
+      <TextField label={t("common.phone")} value={phone} onChange={setPhone} type="tel" placeholder="0712 345 678" hint={t("receipt.phoneHint")} error={err.phone} optional />
+      <FormError message={send.error && !Object.keys(err).length ? errorText(send.error) : null} />
+      <div className="row" style={{ justifyContent: "flex-end" }}>
+        <Button onClick={onDone}>{t("common.cancel")}</Button>
+        <Button type="submit" variant="primary" icon={<Send size={16} />} loading={send.isPending}>{t("receipt.send")}</Button>
+      </div>
+    </form>
+  );
 }
 
 /** One sale: lines, who recorded it, payments and the receipt (SAL-04, SAL-05). */
@@ -249,11 +289,11 @@ function SaleDetailPanel({ saleId, onClose }: { saleId: string; onClose: () => v
   const key = useKey();
   const errorText = useErrorText();
   const currency = useCurrency();
-  const { farm } = useFarm();
   const invalidate = useInvalidateOrg();
   const canWrite = useCan("sales.write");
   const sale = useQuery({ queryKey: key("sale", saleId), queryFn: () => api.sales.get(saleId) });
   const [paying, setPaying] = useState(false);
+  const [sending, setSending] = useState(false);
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState("");
@@ -268,20 +308,6 @@ function SaleDetailPanel({ saleId, onClose }: { saleId: string; onClose: () => v
   });
 
   const s = sale.data;
-  const share = async () => {
-    if (!s) return;
-    const text = receiptText(t, farm?.name ?? "", s, currency, qty);
-    if (navigator.share) {
-      try {
-        await navigator.share({ text });
-        return;
-      } catch {
-        /* cancelled: fall back to copying */
-      }
-    }
-    await navigator.clipboard?.writeText(text);
-    toast(t("sale.receiptCopied"));
-  };
   const pending = s?.payment_request && (s.payment_request.status === "pending" || s.payment_request.status === "awaiting_otp");
 
   return (
@@ -291,7 +317,7 @@ function SaleDetailPanel({ saleId, onClose }: { saleId: string; onClose: () => v
       footer={
         s && (
           <>
-            <Button icon={<Share2 size={16} />} onClick={share}>{t("sale.shareReceipt")}</Button>
+            {canWrite && !sending && <Button icon={<Send size={16} />} onClick={() => (setPaying(false), setSending(true))}>{t("sale.shareReceipt")}</Button>}
             {canWrite && Number(s.balance_due) > 0 && !paying && !pending && <Button variant="primary" onClick={() => (setAmount(s.balance_due), setPaying(true))}>{t("sale.recordPayment")}</Button>}
           </>
         )
@@ -334,6 +360,7 @@ function SaleDetailPanel({ saleId, onClose }: { saleId: string; onClose: () => v
           {s.payment_request && (
             <MpesaStatus saleId={s.id} onRetry={() => (setMethod("mpesa"), setPaying(true))} onCash={() => (setMethod("cash"), setAmount(s.balance_due), setPaying(true))} onCredit={onClose} />
           )}
+          {sending && <ReceiptForm saleId={s.id} onDone={() => setSending(false)} />}
           {paying && (
             <form
               className="stack panel panel-body"
@@ -361,16 +388,26 @@ function SaleDetailPanel({ saleId, onClose }: { saleId: string; onClose: () => v
   );
 }
 
-function CustomerPanel({ onClose }: { onClose: () => void }) {
+/** Add a customer or supplier, or with `party` change their name or phone. */
+export function PartyPanel({ kind, party, onClose }: { kind: "customer" | "supplier"; party?: Party; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
   const invalidate = useInvalidateOrg();
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const save = useMutation({ mutationFn: () => api.sales.createCustomer({ name, phone }), onSuccess: () => (invalidate(), toast(t("cust.saved")), onClose()) });
+  const [name, setName] = useState(party?.name ?? "");
+  const [phone, setPhone] = useState(party?.phone ?? "");
+  const customer = kind === "customer";
+  const save = useMutation({
+    mutationFn: () => {
+      const body = { name, phone };
+      if (party) return customer ? api.sales.updateCustomer(party.id, body) : api.purchases.updateSupplier(party.id, body);
+      return customer ? api.sales.createCustomer(body) : api.purchases.createSupplier(body);
+    },
+    onSuccess: () => (invalidate(), toast(t(party ? "party.updated" : customer ? "cust.saved" : "supp.saved")), onClose()),
+  });
   const err = fieldErrors(save.error);
+  const title = party ? t("party.editTitle", { name: party.name }) : t(customer ? "cust.new" : "supp.new");
   return (
-    <SidePanel title={t("cust.new")} onClose={onClose} onSubmit={() => save.mutate()} footer={<><Button onClick={onClose}>{t("common.cancel")}</Button><Button type="submit" variant="primary" loading={save.isPending}>{t("common.save")}</Button></>}>
+    <SidePanel title={title} onClose={onClose} onSubmit={() => save.mutate()} footer={<><Button onClick={onClose}>{t("common.cancel")}</Button><Button type="submit" variant="primary" loading={save.isPending}>{t("common.save")}</Button></>}>
       <div className="stack">
         <TextField label={t("common.name")} value={name} onChange={setName} error={err.name} autoFocus />
         <TextField label={t("common.phone")} value={phone} onChange={setPhone} type="tel" placeholder="0712 345 678" error={err.phone} optional />
@@ -380,7 +417,7 @@ function CustomerPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function PartiesTable({ rows, balanceLabel, onOpen }: { rows: Party[]; balanceLabel: string; onOpen?: (p: Party) => void }) {
+export function PartiesTable({ rows, balanceLabel, onOpen, onEdit }: { rows: Party[]; balanceLabel: string; onOpen?: (p: Party) => void; onEdit?: (p: Party) => void }) {
   const t = useT();
   const columns: Column<Party>[] = [
     { key: "name", header: t("common.name"), render: (c) => <span className="strong">{c.name}</span>, sort: (a, b) => a.name.localeCompare(b.name) },
@@ -393,6 +430,7 @@ export function PartiesTable({ rows, balanceLabel, onOpen }: { rows: Party[]; ba
       render: (c) => (c.oldest_days == null ? "–" : <Chip tone={c.oldest_days > 30 ? "terracotta" : c.oldest_days > 14 ? "amber" : "neutral"}>{t("common.days", { n: c.oldest_days })}</Chip>),
       sort: (a, b) => (a.oldest_days ?? -1) - (b.oldest_days ?? -1),
     },
+    ...(onEdit ? [{ key: "edit", header: <span className="visually-hidden">{t("common.edit")}</span>, label: "", render: (c: Party) => <Button variant="quiet" size="sm" icon={<Pencil size={14} />} onClick={(e) => (e.stopPropagation(), onEdit(c))}>{t("common.edit")}</Button> }] : []),
   ];
   return <Table rows={rows} columns={columns} rowKey={(c) => c.id} onRowClick={onOpen} />;
 }
@@ -409,6 +447,7 @@ export function SalesPage() {
   const [panel, setPanel] = useState<"new" | "customer" | null>(params.get("new") ? "new" : null);
   const [openSale, setOpenSale] = useState<string | null>(null);
   const [customerFilter, setCustomerFilter] = useState<Party | null>(null);
+  const [editing, setEditing] = useState<Party | null>(null);
 
   useEffect(() => {
     if (params.get("new")) setParams((p) => (p.delete("new"), p), { replace: true });
@@ -458,7 +497,7 @@ export function SalesPage() {
         </div>
       )}
       {tab === "customers" && (customers.isLoading ? <SkeletonRows /> : customers.data?.length ? (
-        <PartiesTable rows={customers.data} balanceLabel={t("cust.owes")} onOpen={(c) => (setCustomerFilter(c), setTab("list"))} />
+        <PartiesTable rows={customers.data} balanceLabel={t("cust.owes")} onOpen={(c) => (setCustomerFilter(c), setTab("list"))} onEdit={canWrite ? setEditing : undefined} />
       ) : (
         <div className="panel"><EmptyState text={t("cust.empty")} /></div>
       ))}
@@ -477,7 +516,8 @@ export function SalesPage() {
         </div>
       )}
       {panel === "new" && <NewSalePanel onClose={() => setPanel(null)} />}
-      {panel === "customer" && <CustomerPanel onClose={() => setPanel(null)} />}
+      {panel === "customer" && <PartyPanel kind="customer" onClose={() => setPanel(null)} />}
+      {editing && <PartyPanel kind="customer" party={editing} onClose={() => setEditing(null)} />}
       {openSale && <SaleDetailPanel saleId={openSale} onClose={() => setOpenSale(null)} />}
     </>
   );

@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useCatalogue, useErrorText, useFarmId, useItems, useKey } from "@/api/hooks";
-import type { ActivityType, Animal, EnterpriseDetail, Item, ItemCategory, TypeCode } from "@/api/types";
+import type { ActivityType, Animal, EnterpriseDetail, Item, ItemCategory, TypeCode, VaccinationPlanStep } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/data";
 import { Skeleton } from "@/components/ui/feedback";
@@ -22,7 +22,7 @@ export function useInvalidateOrg() {
   return () => qc.invalidateQueries({ queryKey: [userId, orgId] });
 }
 
-function useSave<TArgs>(fn: (a: TArgs) => Promise<unknown>, done: MsgKey, onClose: () => void) {
+export function useSave<TArgs>(fn: (a: TArgs) => Promise<unknown>, done: MsgKey, onClose: () => void) {
   const t = useT();
   const invalidate = useInvalidateOrg();
   return useMutation({
@@ -39,7 +39,7 @@ function itemsIn(items: Item[] | undefined, ...cats: ItemCategory[]) {
   return (items ?? []).filter((i) => cats.includes(i.category));
 }
 
-function Footer({ onClose, loading, label }: { onClose: () => void; loading: boolean; label: string }) {
+export function Footer({ onClose, loading, label }: { onClose: () => void; loading: boolean; label: string }) {
   const t = useT();
   return (
     <>
@@ -150,7 +150,8 @@ export function RecordFeedPanel({ ent, onClose }: { ent: EnterpriseDetail; onClo
   );
 }
 
-export function RecordTreatmentPanel({ ent, animals, onClose }: { ent: EnterpriseDetail; animals: Animal[]; onClose: () => void }) {
+/** With `step`, the dose is that step of the batch's vaccination schedule (BAT-04). */
+export function RecordTreatmentPanel({ ent, animals, step, onClose }: { ent: EnterpriseDetail; animals: Animal[]; step?: VaccinationPlanStep; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
   const items = useItems();
@@ -160,16 +161,16 @@ export function RecordTreatmentPanel({ ent, animals, onClose }: { ent: Enterpris
   const item = drugs.find((f) => f.id === itemId) ?? drugs[0];
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState(item?.display_unit ?? "dose");
-  const [dose, setDose] = useState("");
+  const [dose, setDose] = useState(step ? step.vaccine : "");
   const [subject, setSubject] = useState("");
   const save = useSave(
-    () => api.livestock.recordTreatment({ enterprise_id: ent.id, date, item_id: item!.id, qty, unit, dose_note: dose, subject: subject || t("treat.wholeGroup") }),
+    () => api.livestock.recordTreatment({ enterprise_id: ent.id, date, item_id: item!.id, qty, unit, dose_note: dose, subject: subject || t("treat.wholeGroup"), schedule_day: step?.day ?? null }),
     "treat.saved",
     onClose,
   );
   const err = fieldErrors(save.error);
   return (
-    <SidePanel title={t("treat.title")} onClose={onClose} onSubmit={() => save.mutate(undefined)} footer={<Footer onClose={onClose} loading={save.isPending} label={t("common.save")} />}>
+    <SidePanel title={step ? t("vacc.recordTitle", { vaccine: step.vaccine }) : t("treat.title")} onClose={onClose} onSubmit={() => save.mutate(undefined)} footer={<Footer onClose={onClose} loading={save.isPending} label={t("common.save")} />}>
       <div className="stack">
         <DateField label={t("common.date")} value={date} onChange={setDate} max={today()} />
         <SelectField label={`💉 ${t("treat.product")}`} value={item?.id ?? ""} onChange={(v) => (setItemId(v), setUnit(drugs.find((d) => d.id === v)?.display_unit ?? "dose"))} options={drugs.map((f) => ({ value: f.id, label: f.name[t.locale] }))} />
@@ -324,10 +325,10 @@ export function StartBatchPanel({ types, onClose, onStarted }: { types: TypeCode
   const structures = useQuery({ queryKey: key("structures", farmId), queryFn: () => api.farms.structures(farmId), select: (p) => p.results });
   const [type, setType] = useState<TypeCode>(types[0]!);
   const label = catalogue.data?.enterprise_types.find((x) => x.code === type)?.labels.en ?? type;
-  const [f, setF] = useState({ name: "", count: "", date: today(), source: "", cost: "", structure_id: "" });
+  const [f, setF] = useState({ name: "", count: "", date: today(), source: "", cost: "", structure_id: "", age_days: "" });
   const set = <K extends keyof typeof f>(k: K) => (v: string) => setF((s) => ({ ...s, [k]: v }));
   const save = useMutation({
-    mutationFn: () => api.batches.start({ farm_id: farmId, type, name: f.name || `${label}, ${f.date}`, count: Number(f.count), date: f.date, source: f.source, cost: f.cost || "0", structure_id: f.structure_id || null }),
+    mutationFn: () => api.batches.start({ farm_id: farmId, type, name: f.name || `${label}, ${f.date}`, count: Number(f.count), date: f.date, source: f.source, cost: f.cost || "0", structure_id: f.structure_id || null, age_days: Number(f.age_days || 0) }),
     onSuccess: (e) => {
       invalidate();
       toast(t("batch.started"));
@@ -346,6 +347,7 @@ export function StartBatchPanel({ types, onClose, onStarted }: { types: TypeCode
         <TextField className="span-2" label={t("batch.name")} value={f.name} onChange={set("name")} placeholder={`${label}, …`} optional />
         <TextField label={type === "fish" ? t("batch.countFish") : t("batch.count")} value={f.count} onChange={(v) => set("count")(v.replace(/\D/g, ""))} inputMode="numeric" error={err.count} />
         <DateField label={t("batch.date")} value={f.date} onChange={set("date")} max={today()} />
+        <TextField label={t("batch.age")} value={f.age_days} onChange={(v) => set("age_days")(v.replace(/\D/g, ""))} inputMode="numeric" placeholder="0" hint={t("batch.ageHint")} error={err.age_days} optional />
         <TextField label={t("batch.source")} value={f.source} onChange={set("source")} placeholder={t("batch.sourcePlaceholder")} optional />
         <SelectField label={t("batch.structure")} value={f.structure_id} onChange={set("structure_id")} placeholder="" options={(structures.data ?? []).filter((s) => s.type === "poultry_house" || s.type === "pond").map((s) => ({ value: s.id, label: s.name }))} optional />
         {money && <MoneyField className="span-2" label={t("batch.cost")} value={f.cost} onChange={set("cost")} optional />}

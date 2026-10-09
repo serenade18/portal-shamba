@@ -34,7 +34,7 @@ Shamba OS staff sign in at **`/admin/sign-in`** with a staff email and password 
 
 ## Against the real backend
 
-The backend today serves identity, tenancy (members, invitations) and payment requests. Everything else in the design (farms, onboarding, stock, sales, finance, weather, alerts, dashboard) is not built yet, so the portal serves those routes from an in-browser mock that follows `docs/backend-architecture.md`.
+The backend (`new-main` in [shambaos-backend](https://github.com/serenade18/shambaos-backend)) serves every route the portal calls, so nothing is mocked against it. The in-browser mock in `src/api/mock/` stays for `npm run dev:demo`, and follows the same paths and shapes.
 
 | `VITE_MOCK` | What happens |
 | --- | --- |
@@ -44,11 +44,11 @@ The backend today serves identity, tenancy (members, invitations) and payment re
 
 Override it in `.env.local`. `VITE_API_TARGET` changes the proxy target. Requests carry `Accept-Language`, so Django's messages (field errors included) follow the portal's language.
 
-When the backend ships a route, add it to `IMPLEMENTED` in [src/api/client.ts](src/api/client.ts) and delete its handler from [src/api/mock/server.ts](src/api/mock/server.ts). Nothing else changes: the portal already calls the paths and shapes in the architecture doc. Once the schema covers them, `npm run gen:api` generates types from `/api/v1/schema` to replace the hand-written ones in [src/api/types.ts](src/api/types.ts).
+When the backend ships a route, add it to `IMPLEMENTED` in [src/api/client.ts](src/api/client.ts) and give it a handler in [src/api/mock/server.ts](src/api/mock/server.ts) so demo mode keeps working. Once the schema covers them, `npm run gen:api` generates types from `/api/v1/schema` to replace the hand-written ones in [src/api/types.ts](src/api/types.ts).
 
-### Endpoints the portal expects that the backend doesn't have yet
+### Backend routes the portal leaves to others
 
-`GET /catalogue` · `GET/POST /farms`, `PATCH /farms/{id}`, `POST /farms/{id}/types` · `GET /navigation?farm_id` · `POST /onboarding` · `GET/POST /plots`, `GET /plots/{id}/history` · `GET/POST /structures` · `GET /enterprises`, `GET /enterprises/{id}` (with `kpis`), `/records`, `/health`, `/production`, `/close-summary`, `POST /close` · `GET/POST /animals`, `POST /animals/{id}/exit` · `POST /milk-records`, `/feeding-records`, `/treatments` · `POST /batches`, `/batches/{id}/days` · `POST /seasons`, `GET/POST /seasons/{id}/activities`, `/harvests` · `GET /items`, `PATCH /items/{id}` · `GET /stock/balances`, `/stock/movements`, `POST /stock/movements/{id}/reverse`, `/stock/counts`, `/stock/transfers` · `GET/POST /customers`, `/suppliers` · `GET/POST /sales`, `GET /sales/{id}`, `POST /sales/{id}/payments` · `GET/POST /purchases`, `POST /purchases/{id}/payments` · `GET/POST /finance/entries` · `GET /reports/profit`, `/reports/cost-per-unit` · `POST /exports` · `GET /weather` · `GET /alerts`, `POST /alerts/{id}/seen` · `GET /dashboard`.
+`/sync/*` and `POST /auth/otp/*` belong to the Flutter app, `/payments/callbacks/*` to SasaPay. `GET/POST /payments/requests` are reached through `POST /sales`.
 
 Request and response shapes are in [src/api/types.ts](src/api/types.ts). `POST /sales` with `payment.method = "mpesa"` is expected to create the payment request server-side and return it as `payment_request`; the portal then polls the sale.
 

@@ -8,11 +8,11 @@ import { useSession } from "@/stores/session";
 import { MOCK_MODE, sendNetwork, type RawRequest } from "../client";
 import { boundaryProblem, fromPolygon, hectares, toPolygon } from "@/lib/geo";
 import type * as T from "../types";
-import { CATALOGUE, TYPE_FEED, TYPE_ITEMS, TYPE_OUTPUT, typeInfo } from "./catalogue";
+import { CATALOGUE, GESTATION_DAYS, TYPE_FEED, TYPE_ITEMS, TYPE_OUTPUT, typeInfo, VACCINATION_DEFAULTS } from "./catalogue";
 import * as cmd from "./commands";
 import {
   addDays, balanceOf, balances, daysAgo, daysBetween, emptyOrgData, entriesFor, factorFor, getDb, inRange,
-  isoDate, money, qty, save, sumBy, type MEnterprise, type MFinance, type MockDb, type MPurchase, type MRecord, type MRecorder, type MSale, type MUser, type OrgData,
+  isoDate, money, qty, save, sumBy, type MAnimal, type MBreeding, type MEnterprise, type MFinance, type MockDb, type MParty, type MPurchase, type MRecord, type MRecorder, type MSale, type MUser, type OrgData,
 } from "./db";
 import { seed } from "./seed";
 
@@ -124,8 +124,8 @@ function resolveOrg(ctx: Ctx) {
 }
 
 const CAPS: Record<T.Role, T.Capability[]> = {
-  owner: ["records.write", "stock.read", "stock.write", "money.read", "sales.write", "procurement.write", "finance.write", "members.read", "members.manage", "org.settings", "billing"],
-  manager: ["records.write", "stock.read", "stock.write", "money.read", "sales.write", "procurement.write", "finance.write", "members.read", "members.manage"],
+  owner: ["records.write", "stock.read", "stock.write", "money.read", "sales.write", "procurement.write", "finance.write", "members.read", "members.manage", "org.settings", "billing", "schedules.write"],
+  manager: ["records.write", "stock.read", "stock.write", "money.read", "sales.write", "procurement.write", "finance.write", "members.read", "members.manage", "schedules.write"],
   field_worker: ["records.write", "stock.read"],
 };
 
@@ -669,7 +669,7 @@ route("POST", "/structures", (ctx) => {
 /* ---------- Enterprises ---------- */
 
 function publicEnterprise(e: MEnterprise): T.Enterprise {
-  const { cost: _c, source: _s, ...rest } = e;
+  const { cost: _c, source: _s, age_days: _a, ...rest } = e;
   return rest;
 }
 
@@ -899,7 +899,7 @@ route("POST", "/treatments", (ctx) => {
   positive(ctx.body, "qty");
   const e = enterprise(ctx, ctx.body.enterprise_id);
   moduleEnabled(ctx, e.farm_id, e.type);
-  const h = cmd.treatment(data(ctx), e, { date: ctx.body.date, item: ctx.body.item_id, qty: Number(ctx.body.qty), unit: ctx.body.unit, dose: ctx.body.dose_note ?? "", subject: ctx.body.subject || "Whole herd", by: me(ctx) });
+  const h = cmd.treatment(data(ctx), e, { date: ctx.body.date, item: ctx.body.item_id, qty: Number(ctx.body.qty), unit: ctx.body.unit, dose: ctx.body.dose_note ?? "", subject: ctx.body.subject || "Whole herd", scheduleDay: ctx.body.schedule_day ?? null, by: me(ctx) });
   return { ...h, cost: m$(ctx, h.cost), recorded_by: recorder(ctx, h.recorded_by) };
 }, { status: 201 });
 
@@ -915,6 +915,7 @@ route("POST", "/batches", (ctx) => {
     farm: ctx.body.farm_id, type: ctx.body.type, name: ctx.body.name, date: ctx.body.date, count: Number(ctx.body.count),
     cost: can(ctx, "money.read") ? Number(ctx.body.cost || 0) : 0, source: ctx.body.source ?? "", structure: ctx.body.structure_id || null, by: me(ctx),
   });
+  e.age_days = Number(ctx.body.age_days ?? 0);
   return publicEnterprise(e);
 }, { status: 201 });
 route("POST", "/batches/:id/days", (ctx) => {
@@ -1095,14 +1096,21 @@ function debtAge(rows: { date: string; balance: number }[]) {
   return { balance: open.reduce((s, r) => s + r.balance, 0), oldest: open[0] ? daysBetween(open[0].date, isoDate(new Date())) : null };
 }
 
+function customerOut(d: OrgData, c: MParty): T.Party {
+  const { balance, oldest } = debtAge(d.sales.filter((s) => s.customer_id === c.id).map((s) => ({ date: s.date, balance: s.total - s.paid })));
+  return { ...c, balance: money(balance), oldest_days: oldest };
+}
+
+function supplierOut(d: OrgData, c: MParty): T.Party {
+  const { balance, oldest } = debtAge(d.purchases.filter((p) => p.supplier_id === c.id).map((p) => ({ date: p.date, balance: p.total - p.paid })));
+  return { ...c, balance: money(balance), oldest_days: oldest };
+}
+
 route("GET", "/customers", (ctx) => {
   need(ctx, "money.read");
   settleSales(ctx);
   const d = data(ctx);
-  const rows = d.customers.map((c) => {
-    const { balance, oldest } = debtAge(d.sales.filter((s) => s.customer_id === c.id).map((s) => ({ date: s.date, balance: s.total - s.paid })));
-    return { ...c, balance: money(balance), oldest_days: oldest };
-  }).sort((a, b) => Number(b.balance) - Number(a.balance) || a.name.localeCompare(b.name));
+  const rows = d.customers.map((c) => customerOut(d, c)).sort((a, b) => Number(b.balance) - Number(a.balance) || a.name.localeCompare(b.name));
   return paginate(rows, ctx.q, 200);
 });
 route("POST", "/customers", (ctx) => {
@@ -1118,10 +1126,7 @@ route("POST", "/customers", (ctx) => {
 route("GET", "/suppliers", (ctx) => {
   need(ctx, "money.read");
   const d = data(ctx);
-  const rows = d.suppliers.map((c) => {
-    const { balance, oldest } = debtAge(d.purchases.filter((p) => p.supplier_id === c.id).map((p) => ({ date: p.date, balance: p.total - p.paid })));
-    return { ...c, balance: money(balance), oldest_days: oldest };
-  }).sort((a, b) => Number(b.balance) - Number(a.balance) || a.name.localeCompare(b.name));
+  const rows = d.suppliers.map((c) => supplierOut(d, c)).sort((a, b) => Number(b.balance) - Number(a.balance) || a.name.localeCompare(b.name));
   return paginate(rows, ctx.q, 200);
 });
 route("POST", "/suppliers", (ctx) => {
@@ -1831,3 +1836,284 @@ route("GET", "/staff/analytics", (ctx) => {
     ].sort((a, b) => b.members - a.members),
   } satisfies T.StaffAnalytics;
 }, { org: false });
+
+/* ---------- Routes added with the backend's "missing routes" (animals, batches, edits, receipts, your data) ---------- */
+
+route("GET", "/me/export", (ctx) => {
+  const user = ctx.db.users.find((u) => u.id === ctx.userId)!;
+  return {
+    exported_at: new Date().toISOString(),
+    profile: user,
+    memberships: ctx.db.memberships.filter((m) => m.user_id === ctx.userId).map((m) => ({ organisation: ctx.db.orgs.find((o) => o.id === m.org_id)?.name, role: m.role, active: m.is_active, joined: m.created_at })),
+  };
+}, { org: false });
+route("DELETE", "/me", (ctx) => {
+  if (ctx.body.confirm !== true) throw new MockError(400, "validation_error", "Check the highlighted fields.", { confirm: ["Confirm that you want to delete your account."] });
+  const mine = ctx.db.memberships.filter((m) => m.user_id === ctx.userId && m.is_active);
+  const stranded = mine.filter((m) => m.role === "owner" && ctx.db.memberships.some((x) => x.org_id === m.org_id && x.is_active && x.user_id !== ctx.userId)
+    && !ctx.db.memberships.some((x) => x.org_id === m.org_id && x.is_active && x.role === "owner" && x.user_id !== ctx.userId));
+  if (stranded.length) {
+    const names = stranded.map((m) => ctx.db.orgs.find((o) => o.id === m.org_id)?.name).join(", ");
+    throw new MockError(409, "account.last_owner", `Make someone else an owner of ${names} before deleting your account.`);
+  }
+  for (const m of mine) m.is_active = false;
+  ctx.db.users = ctx.db.users.filter((u) => u.id !== ctx.userId);
+  return undefined;
+}, { org: false });
+
+function animalOf(ctx: Ctx, id: string): MAnimal {
+  const a = data(ctx).animals.find((x) => x.id === id);
+  if (!a) throw new MockError(404, "not_found", "Not found.");
+  return a;
+}
+
+function inHerd(ctx: Ctx, a: MAnimal) {
+  if (enterprise(ctx, a.enterprise_id).status === "closed") throw new MockError(400, "enterprise.closed", "This herd is closed.");
+  if (a.status !== "active") throw new MockError(400, "animal.not_in_herd", "This animal has left the herd.");
+}
+
+const animalOut = (ctx: Ctx, a: MAnimal) => ({ ...a, cost: m$(ctx, a.cost != null ? Number(a.cost) : null), conflicts: [] as string[] });
+const breedingOut = (ctx: Ctx, b: MBreeding): T.BreedingEvent => ({ ...b, recorded_by: recorder(ctx, b.recorded_by) });
+
+route("GET", "/animals/:id", (ctx) => animalOut(ctx, animalOf(ctx, ctx.params.id)));
+route("PATCH", "/animals/:id", (ctx) => {
+  need(ctx, "records.write");
+  const a = animalOf(ctx, ctx.params.id);
+  const d = data(ctx);
+  if ("tag" in ctx.body) {
+    const tag = String(ctx.body.tag).trim();
+    if (!tag) throw new MockError(400, "validation_error", "Check the highlighted fields.", { tag: ["Enter the animal's tag."] });
+    if (d.animals.some((x) => x.id !== a.id && x.enterprise_id === a.enterprise_id && x.tag.toLowerCase() === tag.toLowerCase())) {
+      throw new MockError(400, "validation_error", "Check the highlighted fields.", { tag: ["Another animal in this herd has this tag."] });
+    }
+    a.tag = tag;
+  }
+  if ("mother_id" in ctx.body && ctx.body.mother_id) {
+    if (ctx.body.mother_id === a.id || !d.animals.some((x) => x.id === ctx.body.mother_id && x.enterprise_id === a.enterprise_id && x.sex === "female")) {
+      throw new MockError(400, "validation_error", "Check the highlighted fields.", { mother_id: ["Choose a mother from this herd."] });
+    }
+  }
+  if (typeof ctx.body.name === "string") a.name = ctx.body.name.trim();
+  if (typeof ctx.body.breed === "string") a.breed = ctx.body.breed.trim();
+  if (ctx.body.sex === "female" || ctx.body.sex === "male") a.sex = ctx.body.sex;
+  if ("birth_date" in ctx.body) a.birth_date = ctx.body.birth_date || null;
+  if ("mother_id" in ctx.body) a.mother_id = ctx.body.mother_id || null;
+  return animalOut(ctx, a);
+});
+
+route("GET", "/animals/:id/breeding", (ctx) => {
+  const a = animalOf(ctx, ctx.params.id);
+  const rows = data(ctx).breeding.filter((b) => b.animal_id === a.id).sort((x, y) => y.service_date.localeCompare(x.service_date));
+  return { next: null, previous: null, results: rows.map((b) => breedingOut(ctx, b)) };
+});
+route("POST", "/animals/:id/breeding", (ctx) => {
+  need(ctx, "records.write");
+  const a = animalOf(ctx, ctx.params.id);
+  requireFields(ctx.body, "service_date");
+  inHerd(ctx, a);
+  if (a.sex !== "female") throw new MockError(400, "breeding.not_female", "Only females are served.");
+  const e = enterprise(ctx, a.enterprise_id);
+  const b: MBreeding = {
+    id: crypto.randomUUID(), animal_id: a.id, service_date: ctx.body.service_date, method: ctx.body.method === "ai" ? "ai" : "natural", sire: String(ctx.body.sire ?? "").trim(),
+    note: String(ctx.body.note ?? "").trim(), expected_due: addDays(ctx.body.service_date, GESTATION_DAYS[e.type] ?? 283), outcome: null, birth_date: null, recorded_by: me(ctx),
+  };
+  data(ctx).breeding.push(b);
+  return breedingOut(ctx, b);
+}, { status: 201 });
+route("POST", "/animals/:id/births", (ctx) => {
+  need(ctx, "records.write");
+  const mother = animalOf(ctx, ctx.params.id);
+  requireFields(ctx.body, "date");
+  inHerd(ctx, mother);
+  if (mother.sex !== "female") throw new MockError(400, "breeding.not_female", "Only females give birth.");
+  const d = data(ctx);
+  const open = d.breeding.filter((b) => b.animal_id === mother.id && !b.outcome);
+  const event = ctx.body.breeding_event_id ? open.find((b) => b.id === ctx.body.breeding_event_id) : open.filter((b) => b.service_date <= ctx.body.date).sort((x, y) => y.service_date.localeCompare(x.service_date))[0];
+  if (ctx.body.breeding_event_id && !event) throw new MockError(400, "validation_error", "Check the highlighted fields.", { breeding_event_id: ["Choose a service that hasn't ended yet."] });
+  const young = (ctx.body.offspring ?? []) as { tag: string; sex: T.Sex; name: string }[];
+  const tags = young.map((y) => y.tag.trim().toLowerCase());
+  if (new Set(tags).size !== tags.length || d.animals.some((x) => x.enterprise_id === mother.enterprise_id && tags.includes(x.tag.toLowerCase()))) {
+    throw new MockError(400, "validation_error", "Check the highlighted fields.", { offspring: ["Another animal in this herd has this tag."] });
+  }
+  if (event) Object.assign(event, { outcome: "born", birth_date: ctx.body.date });
+  const born = young.map((y) => ({
+    id: crypto.randomUUID(), enterprise_id: mother.enterprise_id, tag: y.tag.trim(), name: (y.name ?? "").trim(), sex: y.sex, breed: mother.breed, birth_date: ctx.body.date,
+    source: "born" as const, cost: null, status: "active" as const, mother_id: mother.id, milk_7d: null,
+  }));
+  d.animals.push(...born);
+  const e = enterprise(ctx, mother.enterprise_id);
+  e.head_count = (e.head_count ?? 0) + born.length;
+  return { breeding_event: event ? breedingOut(ctx, event) : null, offspring: born.map((a) => animalOut(ctx, a)) };
+}, { status: 201 });
+route("GET", "/animals/:id/weights", (ctx) => {
+  const a = animalOf(ctx, ctx.params.id);
+  const rows = data(ctx).weights.filter((w) => w.animal_id === a.id).sort((x, y) => y.date.localeCompare(x.date));
+  return paginate(rows.map((w) => ({ ...w, kg: qty(w.kg), recorded_by: recorder(ctx, w.recorded_by) })), ctx.q, 50);
+});
+route("POST", "/animals/:id/weights", (ctx) => {
+  need(ctx, "records.write");
+  const a = animalOf(ctx, ctx.params.id);
+  requireFields(ctx.body, "date", "kg");
+  if (!(Number(ctx.body.kg) > 0)) throw new MockError(400, "validation_error", "Check the highlighted fields.", { kg: ["Enter a weight greater than zero."] });
+  inHerd(ctx, a);
+  const w = { id: crypto.randomUUID(), animal_id: a.id, date: ctx.body.date, kg: Number(ctx.body.kg), recorded_by: me(ctx) };
+  data(ctx).weights.push(w);
+  return { ...w, kg: qty(w.kg), recorded_by: recorder(ctx, w.recorded_by) };
+}, { status: 201 });
+
+function batchOf(ctx: Ctx, id: string): MEnterprise {
+  const e = enterprise(ctx, id);
+  if (e.module !== "batches") throw new MockError(400, "enterprise.wrong_module", "This is not a batch.");
+  return e;
+}
+
+route("GET", "/batches/:id/weights", (ctx) => {
+  const e = batchOf(ctx, ctx.params.id);
+  const rows = data(ctx).sampleWeights.filter((w) => w.enterprise_id === e.id).sort((x, y) => y.date.localeCompare(x.date));
+  return paginate(rows.map((w) => ({ ...w, avg_kg: qty(w.avg_kg), recorded_by: recorder(ctx, w.recorded_by) })), ctx.q, 50);
+});
+route("POST", "/batches/:id/weights", (ctx) => {
+  need(ctx, "records.write");
+  const e = batchOf(ctx, ctx.params.id);
+  requireFields(ctx.body, "date", "sample_size", "avg_kg");
+  if (!(Number(ctx.body.sample_size) >= 1)) throw new MockError(400, "validation_error", "Check the highlighted fields.", { sample_size: ["Enter how many you weighed."] });
+  if (!(Number(ctx.body.avg_kg) > 0)) throw new MockError(400, "validation_error", "Check the highlighted fields.", { avg_kg: ["Enter a weight greater than zero."] });
+  if (e.status === "closed") throw new MockError(400, "enterprise.closed", "This batch is closed.");
+  if (e.type === "layers") throw new MockError(400, "enterprise.wrong_module", "Sample weights are for broilers and fish.");
+  const w = { id: crypto.randomUUID(), enterprise_id: e.id, date: ctx.body.date, sample_size: Number(ctx.body.sample_size), avg_kg: Number(ctx.body.avg_kg), recorded_by: me(ctx) };
+  data(ctx).sampleWeights.push(w);
+  return { ...w, avg_kg: qty(w.avg_kg), recorded_by: recorder(ctx, w.recorded_by) };
+}, { status: 201 });
+
+const BATCH_TYPES: T.TypeCode[] = ["layers", "broilers", "fish"];
+const stepsFor = (ctx: Ctx, type: T.TypeCode) => ({ steps: data(ctx).schedules[type] ?? VACCINATION_DEFAULTS[type] ?? [], custom: !!data(ctx).schedules[type] });
+
+route("GET", "/batches/:id/vaccinations", (ctx) => {
+  const e = batchOf(ctx, ctx.params.id);
+  const start = e.age_days === undefined ? 0 : e.age_days; // seeded batches arrived as day-olds
+  const today = isoDate(new Date());
+  const { steps, custom } = stepsFor(ctx, e.type);
+  if (start === null) return { enterprise_id: e.id, age_days: null, custom, steps: [] };
+  const done = new Map(data(ctx).health.filter((h) => h.enterprise_id === e.id && h.schedule_day != null).sort((a, b) => b.date.localeCompare(a.date)).map((h) => [h.schedule_day!, h.date]));
+  const plan = [...steps].sort((a, b) => a.day - b.day).filter((s) => s.day >= start).map((s): T.VaccinationPlanStep => {
+    const due = addDays(e.started_on, s.day - start);
+    const status = done.has(s.day) ? "done" : e.status === "closed" ? "missed" : due < today ? "overdue" : due <= addDays(today, 3) ? "due" : "upcoming";
+    return { ...s, due_on: due, status, done_on: done.get(s.day) ?? null };
+  });
+  return { enterprise_id: e.id, age_days: daysBetween(e.started_on, today) + start, custom, steps: plan } satisfies T.BatchVaccinations;
+});
+route("GET", "/vaccination-schedules", (ctx) => ({ next: null, previous: null, results: BATCH_TYPES.map((type) => ({ type, ...stepsFor(ctx, type) })) }));
+route("PUT", "/vaccination-schedules", (ctx) => {
+  need(ctx, "schedules.write");
+  const type = ctx.body.type as T.TypeCode;
+  if (!BATCH_TYPES.includes(type)) throw new MockError(400, "validation_error", "Check the highlighted fields.", { type: ["Choose layers, broilers or fish."] });
+  const steps = ctx.body.steps as T.VaccinationStep[] | null;
+  if (steps === null) delete data(ctx).schedules[type];
+  else {
+    if (steps.some((s) => !String(s.vaccine ?? "").trim())) throw new MockError(400, "validation_error", "Check the highlighted fields.", { steps: ["Enter the vaccine for each step."] });
+    if (new Set(steps.map((s) => s.day)).size !== steps.length) throw new MockError(400, "validation_error", "Check the highlighted fields.", { steps: ["Use each day only once."] });
+    data(ctx).schedules[type] = steps.map((s) => ({ day: Number(s.day), vaccine: s.vaccine.trim(), note: (s.note ?? "").trim() })).sort((a, b) => a.day - b.day);
+  }
+  return { type, ...stepsFor(ctx, type) };
+});
+
+function plotOut(ctx: Ctx, p: T.Plot): T.Plot {
+  const growing = data(ctx).enterprises.find((e) => e.plot_id === p.id && e.status === "active");
+  return { ...p, lease_cost: m$(ctx, p.lease_cost != null ? Number(p.lease_cost) : null), growing_now: growing?.name ?? null };
+}
+
+route("GET", "/plots/:id", (ctx) => {
+  const p = data(ctx).plots.find((x) => x.id === ctx.params.id);
+  if (!p) throw new MockError(404, "not_found", "Not found.");
+  return { ...plotOut(ctx, p), conflicts: [] };
+});
+route("PATCH", "/plots/:id", (ctx) => {
+  need(ctx, "stock.write");
+  const p = data(ctx).plots.find((x) => x.id === ctx.params.id);
+  if (!p) throw new MockError(404, "not_found", "Not found.");
+  if ("area_acres" in ctx.body) {
+    positive(ctx.body, "area_acres");
+    const used = data(ctx).enterprises.filter((e) => e.plot_id === p.id && e.status === "active").reduce((s, e) => s + Number(e.area_acres ?? 0), 0);
+    if (Number(ctx.body.area_acres) < used) throw new MockError(400, "validation_error", "Check the highlighted fields.", { area_acres: [`Crops growing now use ${used.toFixed(2)} acres of this plot.`] });
+    p.area_acres = Number(ctx.body.area_acres).toFixed(2);
+  }
+  if (typeof ctx.body.name === "string") p.name = ctx.body.name.trim();
+  if (ctx.body.tenure) p.tenure = ctx.body.tenure;
+  if ("lease_cost" in ctx.body && can(ctx, "money.read")) p.lease_cost = ctx.body.lease_cost ? Number(ctx.body.lease_cost).toFixed(2) : null;
+  if (p.tenure !== "leased") p.lease_cost = null;
+  return { ...plotOut(ctx, p), conflicts: [] };
+});
+route("GET", "/structures/:id", (ctx) => {
+  const s = data(ctx).structures.find((x) => x.id === ctx.params.id);
+  if (!s) throw new MockError(404, "not_found", "Not found.");
+  return { ...s, conflicts: [] };
+});
+route("PATCH", "/structures/:id", (ctx) => {
+  need(ctx, "stock.write");
+  const s = data(ctx).structures.find((x) => x.id === ctx.params.id);
+  if (!s) throw new MockError(404, "not_found", "Not found.");
+  if (typeof ctx.body.name === "string") s.name = ctx.body.name.trim();
+  if (ctx.body.type) s.type = ctx.body.type;
+  if ("capacity" in ctx.body) s.capacity = ctx.body.capacity ? Number(ctx.body.capacity) : null;
+  return { ...s, conflicts: [] };
+});
+
+function editParty(ctx: Ctx, rows: MParty[]): MParty {
+  const c = rows.find((x) => x.id === ctx.params.id);
+  if (!c) throw new MockError(404, "not_found", "Not found.");
+  if ("name" in ctx.body) {
+    const name = String(ctx.body.name).trim();
+    if (!name) throw new MockError(400, "validation_error", "Check the highlighted fields.", { name: ["Enter a name."] });
+    c.name = name;
+  }
+  if ("phone" in ctx.body) {
+    const phone = ctx.body.phone ? normalizePhone(ctx.body.phone) : "";
+    if (ctx.body.phone && !phone) throw new MockError(400, "validation_error", "Check the phone number.", { phone: ["Enter a valid phone number, like 0712 345 678."] });
+    c.phone = phone ?? "";
+  }
+  return c;
+}
+
+route("GET", "/customers/:id", (ctx) => {
+  need(ctx, "money.read");
+  const c = data(ctx).customers.find((x) => x.id === ctx.params.id);
+  if (!c) throw new MockError(404, "not_found", "Not found.");
+  return customerOut(data(ctx), c);
+});
+route("PATCH", "/customers/:id", (ctx) => {
+  need(ctx, "sales.write");
+  return { ...customerOut(data(ctx), editParty(ctx, data(ctx).customers)), conflicts: [] };
+});
+route("GET", "/suppliers/:id", (ctx) => {
+  need(ctx, "money.read");
+  const c = data(ctx).suppliers.find((x) => x.id === ctx.params.id);
+  if (!c) throw new MockError(404, "not_found", "Not found.");
+  return supplierOut(data(ctx), c);
+});
+route("PATCH", "/suppliers/:id", (ctx) => {
+  need(ctx, "procurement.write");
+  return { ...supplierOut(data(ctx), editParty(ctx, data(ctx).suppliers)), conflicts: [] };
+});
+
+route("POST", "/sales/:id/receipt", (ctx) => {
+  need(ctx, "sales.write");
+  const d = data(ctx);
+  const s = d.sales.find((x) => x.id === ctx.params.id);
+  if (!s) throw new MockError(404, "not_found", "Not found.");
+  const raw = String(ctx.body.phone ?? "").trim() || d.customers.find((c) => c.id === s.customer_id)?.phone || "";
+  if (!raw) throw new MockError(400, "validation_error", "Check the highlighted fields.", { phone: ["Enter the customer's phone number."] });
+  const phone = normalizePhone(raw);
+  if (!phone) throw new MockError(400, "validation_error", "Check the highlighted fields.", { phone: ["Enter a valid phone number, like 0712 345 678."] });
+  const farm = d.farms.find((f) => f.id === s.farm_id)?.name ?? "";
+  const kes = (n: number) => `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const [y, m, day] = s.date.split("-");
+  const text = [
+    `Receipt S-${String(s.number).padStart(4, "0")} from ${farm}, ${day}/${m}/${y}`,
+    ...s.lines.map((l) => `${qty(l.qty)} ${l.unit} ${d.items.find((i) => i.id === l.item_id)?.name.en ?? ""} x ${kes(l.unit_price)} = ${kes(l.qty * l.unit_price)}`),
+    `Total ${kes(s.total)}. Paid ${kes(s.paid)}. Balance ${kes(Math.max(0, s.total - s.paid))}.`,
+    "Thank you.",
+  ].join("\n");
+  const whatsapp = ctx.body.channel === "whatsapp";
+  if (!whatsapp) console.info(`[mock sms] to ${phone}:\n${text}`);
+  return { channel: whatsapp ? "whatsapp" : "sms", phone, text, url: whatsapp ? `https://wa.me/${phone.replace(/^\+/, "")}?text=${encodeURIComponent(text)}` : null } satisfies T.Receipt;
+});

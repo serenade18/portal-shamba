@@ -641,6 +641,16 @@
   grid-column: 1 / -1;
 }
 
+/* One line per row: fields side by side, the remove button lined up with the inputs. */
+.line-row {
+  align-items: end;
+}
+@media (max-width: 640px) {
+  .line-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+}
+
 .list-plain {
   list-style: none;
   padding: 0;

@@ -268,7 +268,7 @@ export function feedDay(data: OrgData, ent: MEnterprise, d: { date: string; item
 export function treatment(
   data: OrgData,
   ent: MEnterprise,
-  t: { date: string; item: string; qty: number; unit: string; dose: string; subject: string; by: MRecorder },
+  t: { date: string; item: string; qty: number; unit: string; dose: string; subject: string; scheduleDay?: number | null; by: MRecorder },
 ) {
   const mv = useInput(data, { farm: ent.farm_id, item: t.item, qty: t.qty, unit: t.unit, enterprise: ent.id, date: t.date, by: t.by }, "health", "treatment");
   const rec = {
@@ -279,6 +279,7 @@ export function treatment(
     dose_note: t.dose,
     subject: t.subject,
     cost: -mv.qty_base * (mv.unit_cost ?? 0),
+    schedule_day: t.scheduleDay ?? null,
     recorded_by: t.by,
   };
   data.health.push(rec);

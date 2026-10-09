@@ -34,6 +34,8 @@ export interface MRecorder {
 export interface MEnterprise extends T.Enterprise {
   cost: number | null; // acquisition cost
   source: string;
+  /** Batches: age on arrival in days, for vaccination reminders. null when unknown. */
+  age_days?: number | null;
 }
 
 export interface MAnimal extends T.Animal {}
@@ -61,6 +63,38 @@ export interface MHealth {
   dose_note: string;
   subject: string;
   cost: number | null;
+  /** The vaccination schedule step this dose was (BAT-04). */
+  schedule_day?: number | null;
+  recorded_by: MRecorder;
+}
+
+export interface MBreeding {
+  id: string;
+  animal_id: string;
+  service_date: string;
+  method: T.BreedingMethod;
+  sire: string;
+  expected_due: string;
+  note: string;
+  outcome: "born" | "failed" | null;
+  birth_date: string | null;
+  recorded_by: MRecorder;
+}
+
+export interface MWeight {
+  id: string;
+  animal_id: string;
+  date: string;
+  kg: number;
+  recorded_by: MRecorder;
+}
+
+export interface MSampleWeight {
+  id: string;
+  enterprise_id: string;
+  date: string;
+  sample_size: number;
+  avg_kg: number;
   recorded_by: MRecorder;
 }
 
@@ -159,6 +193,11 @@ export interface OrgData {
   animals: MAnimal[];
   records: MRecord[];
   health: MHealth[];
+  breeding: MBreeding[];
+  weights: MWeight[];
+  sampleWeights: MSampleWeight[];
+  /** The farm account's own vaccination schedules by batch type; absent types use the default. */
+  schedules: Partial<Record<T.TypeCode, T.VaccinationStep[]>>;
   activities: MActivity[];
   harvests: MHarvest[];
   items: T.Item[];
@@ -187,7 +226,7 @@ export interface MockDb {
 }
 
 const KEY = "shamba-mock-db";
-const VERSION = 7;
+const VERSION = 8;
 
 let db: MockDb | null = null;
 
@@ -234,6 +273,10 @@ export function emptyOrgData(): OrgData {
     animals: [],
     records: [],
     health: [],
+    breeding: [],
+    weights: [],
+    sampleWeights: [],
+    schedules: {},
     activities: [],
     harvests: [],
     items: [],

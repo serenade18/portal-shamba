@@ -19,7 +19,8 @@ export type Capability =
   | "members.read"
   | "members.manage"
   | "org.settings"
-  | "billing";
+  | "billing"
+  | "schedules.write";
 
 export interface ApiErrorBody {
   code: string;
@@ -225,6 +226,7 @@ export interface Plot {
   tenure: Tenure;
   lease_cost: string | null;
   growing_now: string | null;
+  version?: number;
 }
 
 export type StructureType = "shed" | "poultry_house" | "pen" | "pond" | "store";
@@ -235,6 +237,7 @@ export interface Structure {
   name: string;
   type: StructureType;
   capacity: number | null;
+  version?: number;
 }
 
 export interface PlotSeasonHistory {
@@ -351,6 +354,80 @@ export interface Animal {
   status: AnimalStatus;
   mother_id: string | null;
   milk_7d: string | null;
+  exited_on?: string | null;
+  version?: number;
+}
+
+/** Fields an offline edit changed at the same time, waiting for an owner to choose (OFF-03). */
+export interface Edited {
+  conflicts: string[];
+}
+
+export type BreedingMethod = "natural" | "ai";
+
+export interface BreedingEvent {
+  id: string;
+  animal_id: string;
+  service_date: string;
+  method: BreedingMethod;
+  sire: string;
+  expected_due: string;
+  note: string;
+  /** null while she is waiting to give birth. */
+  outcome: "born" | "failed" | null;
+  birth_date: string | null;
+  recorded_by: Recorder;
+}
+
+export interface BirthResult {
+  breeding_event: BreedingEvent | null;
+  offspring: Animal[];
+}
+
+export interface AnimalWeight {
+  id: string;
+  animal_id: string;
+  date: string;
+  kg: string;
+  recorded_by: Recorder;
+}
+
+export interface SampleWeight {
+  id: string;
+  enterprise_id: string;
+  date: string;
+  sample_size: number;
+  avg_kg: string;
+  recorded_by: Recorder;
+}
+
+export interface VaccinationStep {
+  day: number;
+  vaccine: string;
+  note: string;
+}
+
+export type VaccinationState = "done" | "due" | "overdue" | "upcoming" | "missed";
+
+export interface VaccinationPlanStep extends VaccinationStep {
+  due_on: string;
+  status: VaccinationState;
+  done_on: string | null;
+}
+
+export interface BatchVaccinations {
+  enterprise_id: string;
+  /** null for a flock of unknown age: it has no plan. */
+  age_days: number | null;
+  custom: boolean;
+  steps: VaccinationPlanStep[];
+}
+
+export interface VaccinationSchedule {
+  type: TypeCode;
+  steps: VaccinationStep[];
+  /** true once the farm account edited it; false while the catalogue default applies. */
+  custom: boolean;
 }
 
 export interface CloseSummary {
@@ -436,6 +513,17 @@ export interface Party {
   phone: string;
   balance: string | null;
   oldest_days: number | null;
+  version?: number;
+}
+
+export type ReceiptChannel = "sms" | "whatsapp";
+
+export interface Receipt {
+  channel: ReceiptChannel;
+  phone: string;
+  text: string;
+  /** WhatsApp only: opens the chat with the receipt filled in. */
+  url: string | null;
 }
 
 export type PaymentMethod = "mpesa" | "mpesa_code" | "cash" | "credit";
