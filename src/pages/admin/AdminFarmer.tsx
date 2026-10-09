@@ -87,7 +87,12 @@ function Farmer({ f }: { f: StaffFarmerDetail }) {
           </span>
         }
         sub={t("admin.farmer.joined", { date: formatDate(f.date_joined, t.locale) })}
-        actions={f.is_active && <ViewAsFarmer id={f.id} />}
+        actions={f.is_active && (
+          <>
+            {f.email && <ButtonLink to={`/admin/emails/new?to=${f.id}`} icon={<Mail size={16} aria-hidden />}>{t("email.emailFarmer")}</ButtonLink>}
+            <ViewAsFarmer id={f.id} />
+          </>
+        )}
       />
 
       <div className="stack">
