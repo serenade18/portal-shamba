@@ -91,7 +91,7 @@ export function AdminLayout() {
         <header className="topbar">
           <Button variant="quiet" className="menu-btn" onClick={() => setDrawerOpen(true)} aria-label={t("nav.menu")} icon={<Menu size={22} />} />
           <span className="grow" />
-          <Segmented label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "en", label: "EN" }, { value: "sw", label: "SW" }]} />
+          <Segmented label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "en", label: "EN" }, { value: "sw", label: "SW" }, { value: "fr", label: "FR" }]} />
         </header>
         <main className="content" id="main">
           <Outlet />

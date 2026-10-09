@@ -8,7 +8,7 @@ import type { StaffFarmerDetail } from "@/api/types";
 import { ButtonLink } from "@/components/ui/Button";
 import { PageHead, Panel, Table } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, NoPermission, Skeleton, SkeletonRows } from "@/components/ui/feedback";
-import { useT } from "@/i18n";
+import { LANGUAGE_NAMES, useT } from "@/i18n";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
@@ -68,7 +68,7 @@ function Farmer({ f }: { f: StaffFarmerDetail }) {
           <a href={`tel:${f.phone}`}><Phone size={16} aria-hidden /> {formatPhone(f.phone)}</a>
           {f.email && <a href={`mailto:${f.email}`}><Mail size={16} aria-hidden /> {f.email}</a>}
           {f.username && <span className="muted">@{f.username}</span>}
-          <span className="muted">{t("admin.farmer.language", { lang: f.preferred_locale === "sw" ? "Kiswahili" : "English" })}</span>
+          <span className="muted">{t("admin.farmer.language", { lang: LANGUAGE_NAMES[f.preferred_locale] ?? f.preferred_locale })}</span>
           <span className="muted">
             {f.last_seen_at ? t("admin.farmer.lastSeen", { date: formatDate(f.last_seen_at, t.locale) }) : t("admin.farmer.neverSeen")}
           </span>

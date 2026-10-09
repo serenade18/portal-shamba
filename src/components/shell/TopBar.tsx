@@ -261,6 +261,7 @@ export function TopBar() {
           options={[
             { value: "en", label: "EN" },
             { value: "sw", label: "SW" },
+            { value: "fr", label: "FR" },
           ]}
         />
       </span>

@@ -34,7 +34,8 @@ export function alertLink(a: Alert): string {
 /** Alerts arrive as a type code plus parameters and are worded in the reader's language (backend 14). */
 export function alertText(a: Alert, t: Translator, currency: string): string {
   const p = { ...a.params };
-  if (t.locale === "sw" && p.item_sw) p.item = p.item_sw;
+  // Item names come in each language as item_sw, item_fr; `item` is English.
+  if (p[`item_${t.locale}`]) p.item = p[`item_${t.locale}`];
   if (typeof p.date === "string") p.date = formatDate(p.date, t.locale, { year: false, weekday: a.type === "heavy_rain" });
   if (p.unit) p.unit = t.unit(String(p.unit), Number(p.qty) === 1 ? 1 : 2);
   if (p.amount != null) p.amount = formatMoney(p.amount, currency);

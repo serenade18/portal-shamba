@@ -2,12 +2,16 @@ import { useCallback } from "react";
 import type { Locale } from "@/api/types";
 import { useUi } from "@/stores/ui";
 import en from "./en";
+import fr from "./fr";
 import sw from "./sw";
 
 export type MsgKey = keyof typeof en;
 export type Params = Record<string, string | number | null | undefined>;
 
-const dicts: Record<Locale, Record<MsgKey, string>> = { en, sw };
+const dicts: Record<Locale, Record<MsgKey, string>> = { en, sw, fr };
+
+/** Each language named in itself, for language pickers and lists. */
+export const LANGUAGE_NAMES: Record<Locale, string> = { en: "English", sw: "Kiswahili", fr: "Français" };
 
 function interpolate(text: string, params?: Params): string {
   if (!params) return text;

@@ -321,7 +321,7 @@ route("GET", "/me", (ctx) => ctx.db.users.find((u) => u.id === ctx.userId), { or
 route("PATCH", "/me", (ctx) => {
   const user = ctx.db.users.find((u) => u.id === ctx.userId)!;
   if (typeof ctx.body.name === "string") user.name = ctx.body.name.trim();
-  if (ctx.body.preferred_locale === "en" || ctx.body.preferred_locale === "sw") user.preferred_locale = ctx.body.preferred_locale;
+  if (["en", "sw", "fr"].includes(ctx.body.preferred_locale as string)) user.preferred_locale = ctx.body.preferred_locale as T.Locale;
   return user;
 }, { org: false });
 
@@ -561,7 +561,7 @@ route("GET", "/navigation", (ctx) => navigation(ctx, ctx.q.get("farm_id") ?? "")
 
 const SEASON_NAME = () => {
   const m = new Date().getMonth();
-  return m >= 2 && m <= 7 ? { en: "long rains", sw: "masika" } : { en: "short rains", sw: "vuli" };
+  return m >= 2 && m <= 7 ? { en: "long rains", sw: "masika", fr: "grandes pluies" } : { en: "short rains", sw: "vuli", fr: "petites pluies" };
 };
 
 /** Default names are stored data (the farmer can rename them), so they are written in the farmer's language. */
@@ -572,6 +572,9 @@ function defaultNames(type: T.TypeCode, locale: T.Locale) {
   if (locale === "sw") {
     return { herd: `Kundi la ${lower}`, batch: `${label}, kundi la 1`, plot: `Shamba la ${lower}`, season: `${label}, ${SEASON_NAME().sw}` };
   }
+  if (locale === "fr") {
+    return { herd: `Troupeau de ${lower}`, batch: `${label}, lot 1`, plot: `Champ de ${lower}`, season: `${label}, ${SEASON_NAME().fr}` };
+  }
   return { herd: `${label} herd`.replace("cows herd", "herd"), batch: `${label}, batch 1`, plot: `${label} field`, season: `${label}, ${SEASON_NAME().en}` };
 }
 
@@ -579,7 +582,8 @@ function createEnterprisesFor(ctx: Ctx, farmId: string, types: T.TypeCode[], cou
   const d = data(ctx);
   const by = me(ctx);
   const today = isoDate(new Date());
-  const locale: T.Locale = ctx.req.headers["Accept-Language"] === "en" ? "en" : "sw";
+  const lang = ctx.req.headers["Accept-Language"];
+  const locale: T.Locale = lang === "en" || lang === "fr" ? lang : "sw";
   for (const type of types) {
     if (d.enterprises.some((e) => e.farm_id === farmId && e.type === type && e.status === "active")) continue;
     const info = typeInfo(type);
@@ -1139,7 +1143,7 @@ function saleOut(ctx: Ctx, s: MSale): T.Sale {
     id: s.id, number: `S-${String(s.number).padStart(4, "0")}`, date: s.date, customer_id: s.customer_id,
     customer_name: d.customers.find((c) => c.id === s.customer_id)?.name ?? "",
     lines: s.lines.map((l) => ({
-      item_id: l.item_id, item_name: d.items.find((i) => i.id === l.item_id)?.name ?? { en: "", sw: "" }, qty: qty(l.qty), unit: l.unit,
+      item_id: l.item_id, item_name: d.items.find((i) => i.id === l.item_id)?.name ?? { en: "", sw: "", fr: "" }, qty: qty(l.qty), unit: l.unit,
       unit_price: money(l.unit_price), enterprise_id: l.enterprise_id, enterprise_name: d.enterprises.find((e) => e.id === l.enterprise_id)?.name ?? null,
     })),
     total: money(s.total), paid: money(s.paid), balance_due: money(Math.max(0, s.total - s.paid)), status, method: s.method, payment_request: p,
@@ -1226,7 +1230,7 @@ function purchaseOut(ctx: Ctx, p: MPurchase): T.Purchase {
   const d = data(ctx);
   return {
     id: p.id, number: `P-${String(p.number).padStart(4, "0")}`, date: p.date, supplier_id: p.supplier_id, supplier_name: d.suppliers.find((s) => s.id === p.supplier_id)?.name ?? "",
-    lines: p.lines.map((l) => ({ item_id: l.item_id, item_name: d.items.find((i) => i.id === l.item_id)?.name ?? { en: "", sw: "" }, qty: qty(l.qty), unit: l.unit, unit_price: money(l.unit_price) })),
+    lines: p.lines.map((l) => ({ item_id: l.item_id, item_name: d.items.find((i) => i.id === l.item_id)?.name ?? { en: "", sw: "", fr: "" }, qty: qty(l.qty), unit: l.unit, unit_price: money(l.unit_price) })),
     total: money(p.total), paid: money(p.paid), balance_due: money(p.total - p.paid), status: p.paid >= p.total - 0.001 ? "paid" : p.paid > 0 ? "partial" : "credit",
     recorded_by: recorder(ctx, p.recorded_by),
   };
@@ -1442,8 +1446,8 @@ function alertsFor(ctx: Ctx, farmId: string): T.Alert[] {
 
   for (const b of balanceRows(ctx, farmId)) {
     const shown = (Number(b.qty_base) / b.display_factor).toFixed(1).replace(/\.0$/, "");
-    if (b.status === "negative") push({ id: `negative_stock:${b.item_id}`, type: "negative_stock", severity: "critical", subject_type: "item", subject_id: b.item_id, params: { item: b.item_name.en, item_sw: b.item_name.sw, qty: shown, unit: b.display_unit }, money: false });
-    else if (b.status === "low") push({ id: `low_stock:${b.item_id}`, type: "low_stock", severity: "warning", subject_type: "item", subject_id: b.item_id, params: { item: b.item_name.en, item_sw: b.item_name.sw, qty: shown, unit: b.display_unit }, money: false });
+    if (b.status === "negative") push({ id: `negative_stock:${b.item_id}`, type: "negative_stock", severity: "critical", subject_type: "item", subject_id: b.item_id, params: { item: b.item_name.en, item_sw: b.item_name.sw, item_fr: b.item_name.fr, qty: shown, unit: b.display_unit }, money: false });
+    else if (b.status === "low") push({ id: `low_stock:${b.item_id}`, type: "low_stock", severity: "warning", subject_type: "item", subject_id: b.item_id, params: { item: b.item_name.en, item_sw: b.item_name.sw, item_fr: b.item_name.fr, qty: shown, unit: b.display_unit }, money: false });
   }
   for (const e of d.enterprises.filter((x) => x.farm_id === farmId && x.status === "active" && x.module === "batches" && picks.includes(x.type))) {
     const recs = d.records.filter((r) => r.enterprise_id === e.id);

@@ -1,6 +1,7 @@
 import type { Locale } from "@/api/types";
 
-const intlLocale = (l: Locale) => (l === "sw" ? "sw-KE" : "en-KE");
+const INTL_LOCALES: Record<Locale, string> = { en: "en-KE", sw: "sw-KE", fr: "fr" };
+const intlLocale = (l: Locale) => INTL_LOCALES[l];
 
 /** "KES 245,600": thousands separators, no decimals unless the value has cents (section 10). */
 export function formatMoney(value: string | number | null | undefined, currency = "KES", opts: { abs?: boolean } = {}): string {

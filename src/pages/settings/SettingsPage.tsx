@@ -308,7 +308,7 @@ function You() {
     <div className="stack-lg" style={{ maxWidth: 480 }}>
       <Panel title={t("settings.language")}>
         <div className="stack">
-          <ChoiceCards<Locale> label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "sw", label: "Kiswahili" }, { value: "en", label: "English" }]} />
+          <ChoiceCards<Locale> label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "sw", label: "Kiswahili" }, { value: "en", label: "English" }, { value: "fr", label: "Français" }]} />
           <p className="small muted">{t("settings.languageHelp")}</p>
         </div>
       </Panel>

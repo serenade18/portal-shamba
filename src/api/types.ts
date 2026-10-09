@@ -6,7 +6,7 @@
  * the backend ships them. Decimals arrive as strings (API conventions).
  */
 
-export type Locale = "en" | "sw";
+export type Locale = "en" | "sw" | "fr";
 export type Role = "owner" | "manager" | "field_worker";
 export type Capability =
   | "records.write"

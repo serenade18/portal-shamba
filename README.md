@@ -59,7 +59,7 @@ src/
   api/          client (auth refresh, X-Org-Id, error envelope, mock routing), endpoints, hooks, types
   api/mock/     the temporary in-browser backend and its seed data
   stores/       session (tokens, memberships, active organisation), UI (language, farm, period), toasts
-  i18n/         en.ts and sw.ts; sw is typed against en, so a missing translation fails the build
+  i18n/         en.ts, sw.ts and fr.ts; sw and fr are typed against en, so a missing translation fails the build
   styles/       tokens.css (the palette and scale from build.md), base, components, shell
   components/   ui kit and the app shell
   features/     one folder per screen
@@ -77,6 +77,6 @@ src/
 
 - Drawing plot boundaries on a map (FRM-03) and a map pin for the farm location; GPS and county are in.
 - Tile pictures are emoji placeholders until images are tested with farmers.
-- The Swahili text is a draft for native-speaker review (build.md W6).
+- The Swahili and French text are drafts for native-speaker review (build.md W6).
 - The main bundle is about 940 kB before gzip; route-level code splitting would cut the first load.
 - No automated tests yet.

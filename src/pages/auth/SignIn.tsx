@@ -103,7 +103,7 @@ export function SignIn() {
 
   const language = (
     <div className="auth-lang">
-      <Segmented label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "en", label: "English" }, { value: "sw", label: "Kiswahili" }]} />
+      <Segmented label={t("settings.language")} value={locale} onChange={setLocale} options={[{ value: "en", label: "English" }, { value: "sw", label: "Kiswahili" }, { value: "fr", label: "Français" }]} />
     </div>
   );
 

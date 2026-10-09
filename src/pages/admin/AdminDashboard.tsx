@@ -11,7 +11,7 @@ import { ChartFrame } from "@/components/ui/charts";
 import { PageHead, Panel, Table } from "@/components/ui/data";
 import { Chip, ErrorState, NoPermission, Skeleton } from "@/components/ui/feedback";
 import { Segmented } from "@/components/ui/forms";
-import { useT } from "@/i18n";
+import { LANGUAGE_NAMES, useT } from "@/i18n";
 import { formatDate, formatMoney, formatTime, percentChange } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { useAdminSession } from "@/stores/adminSession";
@@ -193,7 +193,7 @@ function Dashboard({ data, days }: { data: StaffAnalytics; days: AnalyticsDays }
       </div>
       <div className="span-4">
         <Panel title={t("admin.languages")}>
-          <BarList rows={data.languages.map((l) => ({ key: l.locale, label: l.locale === "sw" ? "Kiswahili" : "English", value: l.farmers }))} />
+          <BarList rows={data.languages.map((l) => ({ key: l.locale, label: LANGUAGE_NAMES[l.locale] ?? l.locale, value: l.farmers }))} />
         </Panel>
       </div>
       <div className="span-4">
