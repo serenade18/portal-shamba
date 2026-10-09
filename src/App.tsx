@@ -18,7 +18,6 @@ import { FarmSetup } from "./pages/auth/FarmSetup";
 import { Dashboard } from "./pages/dashboard/Dashboard";
 import { EnterpriseDetail } from "./pages/enterprise/EnterpriseDetail";
 import { EnterpriseList } from "./pages/enterprise/EnterpriseList";
-import { FarmPage } from "./pages/farm/FarmPage";
 import { MoneyPage } from "./pages/money/MoneyPage";
 import { NotFound } from "./pages/NotFound";
 import { Onboarding } from "./pages/onboarding/Onboarding";
@@ -91,7 +90,7 @@ const router = createBrowserRouter([
             element: <AppShell />,
             children: [
               { path: "/", element: <Dashboard /> },
-              { path: "/farm", element: <FarmPage /> },
+              { path: "/farm", element: <Navigate to="/settings?tab=plots" replace /> },
               { path: "/animals", element: <EnterpriseList module="livestock" /> },
               { path: "/animals/:id", element: <EnterpriseDetail module="livestock" /> },
               { path: "/poultry", element: <EnterpriseList module="batches" /> },

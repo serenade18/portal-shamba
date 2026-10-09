@@ -20,6 +20,7 @@ import { useCan, useMembership, useSession } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useUi } from "@/stores/ui";
 import { BoundaryEditor, FarmForm } from "../../pages/auth/FarmSetup";
+import { PlotsSettings, StructuresSettings } from "../farm/LandSettings";
 import { useInvalidateOrg } from "../enterprise/forms";
 import { TypeTiles } from "../onboarding/TypeTiles";
 
@@ -398,6 +399,8 @@ export function SettingsPage() {
     : [
         { value: "farm" as const, label: t("settings.tab.farm") },
         { value: "keep" as const, label: t("settings.tab.keep") },
+        { value: "plots" as const, label: t("farm.plots") },
+        { value: "structures" as const, label: t("farm.structures") },
         { value: "members" as const, label: t("settings.tab.members") },
         { value: "you" as const, label: t("settings.tab.you") },
       ];
@@ -412,6 +415,8 @@ export function SettingsPage() {
         <>
           {tab === "farm" && <FarmDetails />}
           {tab === "keep" && <WhatYouKeep />}
+          {tab === "plots" && <PlotsSettings />}
+          {tab === "structures" && <StructuresSettings />}
           {tab === "members" && <Members />}
           {tab === "you" && <You />}
         </>

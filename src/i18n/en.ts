@@ -118,7 +118,6 @@ const en = {
   "state.goHome": "Go to the dashboard",
 
   "nav.dashboard": "Dashboard",
-  "nav.farm": "Farm",
   "nav.animals": "Animals",
   "nav.poultry": "Poultry & fish",
   "nav.crops": "Crops",
@@ -446,7 +445,7 @@ const en = {
   "season.date": "Planting date",
   "season.name": "Name",
   "season.started": "Season started",
-  "season.noPlots": "Add a plot in Farm first, then start a season on it.",
+  "season.noPlots": "Add a plot in Settings → Plots first, then start a season on it.",
 
   "act.title": "Record activity",
   "act.type": "Activity",
@@ -721,7 +720,6 @@ const en = {
   "cond.rain": "Rain",
   "cond.heavy_rain": "Heavy rain",
 
-  "farm.title": "Farm",
   "farm.plots": "Plots",
   "farm.structures": "Structures",
   "farm.addPlot": "Add plot",

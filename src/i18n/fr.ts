@@ -124,7 +124,6 @@ const fr: Record<keyof typeof en, string> = {
   "state.goHome": "Aller au tableau de bord",
 
   "nav.dashboard": "Tableau de bord",
-  "nav.farm": "Ferme",
   "nav.animals": "Animaux",
   "nav.poultry": "Volailles et poissons",
   "nav.crops": "Cultures",
@@ -452,7 +451,7 @@ const fr: Record<keyof typeof en, string> = {
   "season.date": "Date de plantation",
   "season.name": "Nom",
   "season.started": "Saison démarrée",
-  "season.noPlots": "Ajoutez d'abord une parcelle dans Ferme, puis démarrez-y une saison.",
+  "season.noPlots": "Ajoutez d'abord une parcelle dans Paramètres → Parcelles, puis démarrez-y une saison.",
 
   "act.title": "Enregistrer une activité",
   "act.type": "Activité",
@@ -727,7 +726,6 @@ const fr: Record<keyof typeof en, string> = {
   "cond.rain": "Pluie",
   "cond.heavy_rain": "Fortes pluies",
 
-  "farm.title": "Ferme",
   "farm.plots": "Parcelles",
   "farm.structures": "Bâtiments",
   "farm.addPlot": "Ajouter une parcelle",
