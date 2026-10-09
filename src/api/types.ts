@@ -685,6 +685,10 @@ export interface Dashboard {
   to: string;
   profit: ProfitReport | null; // null without money.read
   receivables: { total: string; customers: number; oldest_days: number | null; oldest_customer: string | null } | null;
+  /** Purchases dated in the period. Stock is a cost only when used, so this is spending, not profit. null without money.read. */
+  stock_bought: { total: string; paid: string; owed: string; purchases: number } | null;
+  /** Everything owed to suppliers, whenever bought. null without money.read. */
+  payables: { total: string; suppliers: number; oldest_days: number | null; oldest_supplier: string | null } | null;
   alerts: Alert[];
   today: TodayRecord[];
   stock: StockBalance[];

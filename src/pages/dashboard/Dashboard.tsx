@@ -5,11 +5,11 @@ import * as api from "@/api/endpoints";
 import { useCatalogue, useFarm, useKey, useRange } from "@/api/hooks";
 import type { Dashboard as DashboardData, TodayRecord } from "@/api/types";
 import { ButtonLink } from "@/components/ui/Button";
-import { Money, PageHead, Panel } from "@/components/ui/data";
+import { Money, PageHead, Panel, useCurrency } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, Skeleton } from "@/components/ui/feedback";
 import { AlertRow } from "@/pages/alerts/AlertRow";
 import { useQty, useT } from "@/i18n";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { useCan, useSession } from "@/stores/session";
 import { enterprisePath } from "../enterprise/paths";
 import { EnterpriseStrip } from "./EnterpriseStrip";
@@ -71,6 +71,45 @@ function Owed({ data }: { data: NonNullable<DashboardData["receivables"]> }) {
           {data.oldest_days != null && <p className="small muted">{t("dash.oldest", { days: data.oldest_days, name: data.oldest_customer })}</p>}
         </div>
       )}
+    </Panel>
+  );
+}
+
+/** What was spent on stock in the period and what is owed to suppliers. Buying is not a cost
+ * until the stock is used, so this never shows in profit (PRO-02, PRO-03). */
+function Spent({ bought, payables }: { bought: NonNullable<DashboardData["stock_bought"]>; payables: NonNullable<DashboardData["payables"]> }) {
+  const t = useT();
+  const currency = useCurrency();
+  return (
+    <Panel title={t("dash.spent")} className="owed-card" actions={<Link to="/purchases" className="small strong">{t("common.view")}</Link>}>
+      <div className="stack" style={{ gap: 4 }}>
+        {Number(bought.total) === 0 ? (
+          <p className="muted">{t("dash.spentNone")}</p>
+        ) : (
+          <>
+            <p className="owed-figure"><ShoppingCart size={22} aria-hidden /><Money value={bought.total} kind="cost" /></p>
+            <p className="muted">{t.n("dash.spentPurchases", bought.purchases)}</p>
+            <p className="small muted">
+              {t("dash.spentPaid", { amount: formatMoney(bought.paid, currency) })}
+              {Number(bought.owed) > 0 && ` · ${t("dash.spentOwed", { amount: formatMoney(bought.owed, currency) })}`}
+            </p>
+          </>
+        )}
+        <p className="small muted" style={{ marginTop: 8 }}>{t("dash.spentHelp")}</p>
+        <div className="stack" style={{ gap: 2, marginTop: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+          {Number(payables.total) === 0 ? (
+            <p className="muted row"><CheckCircle2 size={18} className="ink-health" aria-hidden /> {t("dash.suppliersPaid")}</p>
+          ) : (
+            <>
+              <p className="row" style={{ gap: 6 }}>
+                <span>{t("dash.suppliersOwed")}</span>
+                <Link to="/purchases?tab=owe" className="strong"><Money value={payables.total} kind="cost" /></Link>
+              </p>
+              {payables.oldest_days != null && <p className="small muted">{t("dash.oldest", { days: payables.oldest_days, name: payables.oldest_supplier })}</p>}
+            </>
+          )}
+        </div>
+      </div>
     </Panel>
   );
 }
@@ -171,8 +210,9 @@ export function Dashboard() {
               {active ? <EnterpriseStrip rows={d.profit.enterprises} /> : <EmptyState text={t("dash.noActivity")} />}
             </section>
           )}
-          <div className={d.receivables ? "span-7" : "span-12"}><Attention data={d} /></div>
-          {d.receivables && <div className="span-5"><StockPanel data={d} /></div>}
+          {d.stock_bought && d.payables && <div className="span-4"><Spent bought={d.stock_bought} payables={d.payables} /></div>}
+          <div className={d.receivables ? "span-4" : "span-12"}><Attention data={d} /></div>
+          {d.receivables && <div className="span-4"><StockPanel data={d} /></div>}
         </div>
       ) : null}
     </>
