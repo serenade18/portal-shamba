@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { MessageSquare, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { Download, FileText, MessageSquare, Pencil, Plus, Send, Share2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import * as api from "@/api/endpoints";
-import { fieldErrors, useEnterprises, useErrorText, useFarmId, useItems, useKey, usePaged, useRange } from "@/api/hooks";
+import { fieldErrors, useEnterprises, useErrorText, useFarm, useFarmId, useItems, useKey, usePaged, useRange } from "@/api/hooks";
 import type { NewSaleInput, Party, PaymentMethod, Receipt, ReceiptChannel, Sale } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { Money, PageHead, RecordedBy, Table, Tabs, useCurrency, useTabParam, type Column } from "@/components/ui/data";
@@ -18,6 +18,7 @@ import { toast } from "@/stores/toast";
 import { useInvalidateOrg } from "../enterprise/forms";
 import { MpesaStatus } from "./MpesaStatus";
 import { PartyPicker, type NewParty } from "./PartyPicker";
+import { canSharePdf, downloadFile, receiptPdf } from "./receiptPdf";
 import { SaleStatusChip, SalesTable } from "./SalesTable";
 
 interface Line {
@@ -230,34 +231,64 @@ function NewSalePanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Sends the customer a receipt: by SMS from the server, or a WhatsApp link (SAL-05). */
-function ReceiptForm({ saleId, onDone }: { saleId: string; onDone: () => void }) {
+/**
+ * Sends the customer a receipt (SAL-05): by SMS from the server, or on WhatsApp as a PDF.
+ * WhatsApp chat links carry text only, so the PDF goes through the device's share sheet,
+ * or is downloaded for attaching by hand where the browser can't share files.
+ */
+function ReceiptForm({ sale, onDone }: { sale: Sale; onDone: () => void }) {
   const t = useT();
   const errorText = useErrorText();
+  const currency = useCurrency();
+  const { farm } = useFarm();
   const [channel, setChannel] = useState<ReceiptChannel>("sms");
   const [phone, setPhone] = useState("");
-  const [sent, setSent] = useState<Receipt | null>(null);
+  const [sent, setSent] = useState<{ receipt: Receipt; pdf: File } | null>(null);
   const send = useMutation({
-    mutationFn: () => api.sales.sendReceipt(saleId, { channel, phone }),
-    onSuccess: (r) => {
-      if (r.channel === "sms") {
-        toast(t("receipt.sentSms", { phone: formatPhone(r.phone) }));
+    mutationFn: async () => {
+      const receipt = await api.sales.sendReceipt(sale.id, { channel, phone });
+      return { receipt, pdf: receipt.channel === "whatsapp" ? await receiptPdf(t, sale, farm?.name ?? "", currency) : null };
+    },
+    onSuccess: ({ receipt, pdf }) => {
+      if (!pdf) {
+        toast(t("receipt.sentSms", { phone: formatPhone(receipt.phone) }));
         onDone();
-      } else setSent(r);
+      } else setSent({ receipt, pdf });
     },
   });
+  const share = async (pdf: File) => {
+    try {
+      await navigator.share({ files: [pdf], title: pdf.name });
+      toast(t("receipt.shared"));
+      onDone();
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // closed the share sheet
+      downloadFile(pdf);
+    }
+  };
   const err = fieldErrors(send.error);
-  if (sent?.url) {
+  if (sent) {
+    const sharable = canSharePdf(sent.pdf);
     return (
       <div className="stack panel panel-body">
-        <p className="small muted">{t("receipt.whatsappReady", { phone: formatPhone(sent.phone) })}</p>
-        <pre className="small" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{sent.text}</pre>
+        <p className="row" style={{ gap: 8, flexWrap: "nowrap" }}>
+          <FileText size={20} aria-hidden style={{ flex: "none" }} />
+          <span>{t("receipt.pdfReady", { phone: formatPhone(sent.receipt.phone) })}</span>
+        </p>
+        <p className="small muted">{sharable ? t("receipt.shareHelp") : t("receipt.downloadHelp")}</p>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <Button onClick={onDone}>{t("common.close")}</Button>
-          <a className="btn btn-primary" href={sent.url} target="_blank" rel="noreferrer">
-            <MessageSquare size={16} aria-hidden />
-            {t("receipt.openWhatsapp")}
-          </a>
+          <Button icon={<Download size={16} />} onClick={() => downloadFile(sent.pdf)}>{t("receipt.downloadPdf")}</Button>
+          {sharable ? (
+            <Button variant="primary" icon={<Share2 size={16} />} onClick={() => share(sent.pdf)}>{t("receipt.sharePdf")}</Button>
+          ) : (
+            sent.receipt.url && (
+              <a className="btn btn-primary" href={sent.receipt.url} target="_blank" rel="noreferrer">
+                <MessageSquare size={16} aria-hidden />
+                {t("receipt.openWhatsapp")}
+              </a>
+            )
+          )}
         </div>
       </div>
     );
@@ -271,12 +302,12 @@ function ReceiptForm({ saleId, onDone }: { saleId: string; onDone: () => void })
         send.mutate();
       }}
     >
-      <ChoiceCards<ReceiptChannel> label={t("receipt.channel")} value={channel} onChange={setChannel} options={[{ value: "sms", label: t("receipt.sms") }, { value: "whatsapp", label: "WhatsApp" }]} />
+      <ChoiceCards<ReceiptChannel> label={t("receipt.channel")} value={channel} onChange={setChannel} options={[{ value: "sms", label: t("receipt.sms") }, { value: "whatsapp", label: t("receipt.whatsappPdf") }]} />
       <TextField label={t("common.phone")} value={phone} onChange={setPhone} type="tel" placeholder="0712 345 678" hint={t("receipt.phoneHint")} error={err.phone} optional />
       <FormError message={send.error && !Object.keys(err).length ? errorText(send.error) : null} />
       <div className="row" style={{ justifyContent: "flex-end" }}>
         <Button onClick={onDone}>{t("common.cancel")}</Button>
-        <Button type="submit" variant="primary" icon={<Send size={16} />} loading={send.isPending}>{t("receipt.send")}</Button>
+        <Button type="submit" variant="primary" icon={<Send size={16} />} loading={send.isPending}>{t(channel === "sms" ? "receipt.send" : "receipt.makePdf")}</Button>
       </div>
     </form>
   );
@@ -360,7 +391,7 @@ function SaleDetailPanel({ saleId, onClose }: { saleId: string; onClose: () => v
           {s.payment_request && (
             <MpesaStatus saleId={s.id} onRetry={() => (setMethod("mpesa"), setPaying(true))} onCash={() => (setMethod("cash"), setAmount(s.balance_due), setPaying(true))} onCredit={onClose} />
           )}
-          {sending && <ReceiptForm saleId={s.id} onDone={() => setSending(false)} />}
+          {sending && <ReceiptForm sale={s} onDone={() => setSending(false)} />}
           {paying && (
             <form
               className="stack panel panel-body"
