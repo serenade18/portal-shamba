@@ -5,13 +5,13 @@ import * as api from "@/api/endpoints";
 import { fieldErrors, useErrorText, useFarm, useKey } from "@/api/hooks";
 import type { Plot, Structure, StructureType, Tenure } from "@/api/types";
 import { Button } from "@/components/ui/Button";
-import { Money, PageHead, Table, Tabs, useCurrency, useTabParam } from "@/components/ui/data";
-import { Chip, EmptyState, NoPermission, SkeletonRows } from "@/components/ui/feedback";
+import { Money, Table, useCurrency } from "@/components/ui/data";
+import { Chip, EmptyState, SkeletonRows } from "@/components/ui/feedback";
 import { ChoiceCards, FormError, MoneyField, SelectField, TextField } from "@/components/ui/forms";
 import { SidePanel } from "@/components/ui/overlay";
 import { useQty, useT } from "@/i18n";
 import { formatDate, formatMoney } from "@/lib/format";
-import { useCan, useMembership } from "@/stores/session";
+import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { useInvalidateOrg } from "../enterprise/forms";
 
@@ -106,63 +106,75 @@ function PlotHistoryPanel({ plot, onClose }: { plot: Plot; onClose: () => void }
   );
 }
 
-export function FarmPage() {
+/** The farm's plots, with history and editing (FRM-02, FRM-04, FRM-06). Shown in Settings. */
+export function PlotsSettings() {
   const t = useT();
   const key = useKey();
   const qty = useQty();
   const { farm } = useFarm();
-  const role = useMembership()?.role;
   const money = useCan("money.read");
   const currency = useCurrency();
   const canWrite = useCan("stock.write");
-  const [tab, setTab] = useTabParam(["plots", "structures"] as const, "plots");
-  const [panel, setPanel] = useState<"plot" | "structure" | null>(null);
+  const [adding, setAdding] = useState(false);
   const [history, setHistory] = useState<Plot | null>(null);
   const [editPlot, setEditPlot] = useState<Plot | null>(null);
-  const [editStructure, setEditStructure] = useState<Structure | null>(null);
   const plots = useQuery({ queryKey: key("plots", farm?.id), queryFn: () => api.farms.plots(farm!.id), enabled: !!farm, select: (p) => p.results });
-  const structures = useQuery({ queryKey: key("structures", farm?.id), queryFn: () => api.farms.structures(farm!.id), enabled: !!farm, select: (p) => p.results });
-
-  if (role === "field_worker") return <NoPermission />;
   const acres = (plots.data ?? []).reduce((s, p) => s + Number(p.area_acres), 0);
 
   return (
-    <>
-      <PageHead
-        title={farm?.name ?? t("farm.title")}
-        sub={farm && [farm.county, farm.location && `${farm.location.lat.toFixed(3)}, ${farm.location.lng.toFixed(3)}`].filter(Boolean).join(", ")}
-        actions={canWrite && (tab === "plots"
-          ? <Button variant="primary" icon={<Plus size={18} />} onClick={() => setPanel("plot")}>{t("farm.addPlot")}</Button>
-          : <Button variant="primary" icon={<Plus size={18} />} onClick={() => setPanel("structure")}>{t("farm.addStructure")}</Button>)}
-      />
-      <Tabs label={t("farm.title")} value={tab} onChange={setTab} tabs={[{ value: "plots", label: t("farm.plots") }, { value: "structures", label: t("farm.structures") }]} />
-      {tab === "plots" && (plots.isLoading ? <SkeletonRows /> : !plots.data?.length ? <div className="panel"><EmptyState text={t("farm.plotsEmpty")} /></div> : (
-        <div className="stack">
-          <p className="muted">{t("farm.plotsSummary", { acres: acres.toFixed(2), n: plots.data.length })}</p>
-          <Table
-            rows={plots.data}
-            rowKey={(p) => p.id}
-            columns={[
-              { key: "n", header: t("plot.name"), render: (p) => <span className="strong">{p.name}</span>, sort: (a, b) => a.name.localeCompare(b.name) },
-              { key: "a", header: t("plot.area"), numeric: true, render: (p) => qty(p.area_acres, "acres", 2), sort: (a, b) => Number(a.area_acres) - Number(b.area_acres) },
-              { key: "t", header: t("plot.tenure"), render: (p) => <span>{t(`tenure.${p.tenure}`)}{money && p.lease_cost && <span className="small muted" style={{ display: "block" }}>{t("plot.perYear", { amount: formatMoney(p.lease_cost, currency) })}</span>}</span> },
-              { key: "g", header: t("plot.growing"), render: (p) => p.growing_now ?? <span className="muted">{t("plot.nothing")}</span> },
-              {
-                key: "h",
-                header: <span className="visually-hidden">{t("plot.history")}</span>,
-                label: "",
-                render: (p) => (
-                  <span className="row" style={{ gap: 4, flexWrap: "nowrap", justifyContent: "flex-end" }}>
-                    <Button variant="quiet" size="sm" icon={<History size={14} />} onClick={() => setHistory(p)}>{t("plot.history")}</Button>
-                    {canWrite && <Button variant="quiet" size="sm" icon={<Pencil size={14} />} onClick={() => setEditPlot(p)}>{t("common.edit")}</Button>}
-                  </span>
-                ),
-              },
-            ]}
-          />
+    <div className="stack">
+      <div className="spread">
+        <p className="muted">{plots.data?.length ? t("farm.plotsSummary", { acres: acres.toFixed(2), n: plots.data.length }) : ""}</p>
+        {canWrite && <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAdding(true)}>{t("farm.addPlot")}</Button>}
+      </div>
+      {plots.isLoading ? <SkeletonRows /> : !plots.data?.length ? <div className="panel"><EmptyState text={t("farm.plotsEmpty")} /></div> : (
+        <Table
+          rows={plots.data}
+          rowKey={(p) => p.id}
+          columns={[
+            { key: "n", header: t("plot.name"), render: (p) => <span className="strong">{p.name}</span>, sort: (a, b) => a.name.localeCompare(b.name) },
+            { key: "a", header: t("plot.area"), numeric: true, render: (p) => qty(p.area_acres, "acres", 2), sort: (a, b) => Number(a.area_acres) - Number(b.area_acres) },
+            { key: "t", header: t("plot.tenure"), render: (p) => <span>{t(`tenure.${p.tenure}`)}{money && p.lease_cost && <span className="small muted" style={{ display: "block" }}>{t("plot.perYear", { amount: formatMoney(p.lease_cost, currency) })}</span>}</span> },
+            { key: "g", header: t("plot.growing"), render: (p) => p.growing_now ?? <span className="muted">{t("plot.nothing")}</span> },
+            {
+              key: "h",
+              header: <span className="visually-hidden">{t("plot.history")}</span>,
+              label: "",
+              render: (p) => (
+                <span className="row" style={{ gap: 4, flexWrap: "nowrap", justifyContent: "flex-end" }}>
+                  <Button variant="quiet" size="sm" icon={<History size={14} />} onClick={() => setHistory(p)}>{t("plot.history")}</Button>
+                  {canWrite && <Button variant="quiet" size="sm" icon={<Pencil size={14} />} onClick={() => setEditPlot(p)}>{t("common.edit")}</Button>}
+                </span>
+              ),
+            },
+          ]}
+        />
+      )}
+      {adding && <PlotPanel onClose={() => setAdding(false)} />}
+      {editPlot && <PlotPanel plot={editPlot} onClose={() => setEditPlot(null)} />}
+      {history && <PlotHistoryPanel plot={history} onClose={() => setHistory(null)} />}
+    </div>
+  );
+}
+
+/** Sheds, poultry houses, pens, ponds and stores (FRM-05). Shown in Settings. */
+export function StructuresSettings() {
+  const t = useT();
+  const key = useKey();
+  const { farm } = useFarm();
+  const canWrite = useCan("stock.write");
+  const [adding, setAdding] = useState(false);
+  const [editStructure, setEditStructure] = useState<Structure | null>(null);
+  const structures = useQuery({ queryKey: key("structures", farm?.id), queryFn: () => api.farms.structures(farm!.id), enabled: !!farm, select: (p) => p.results });
+
+  return (
+    <div className="stack">
+      {canWrite && (
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAdding(true)}>{t("farm.addStructure")}</Button>
         </div>
-      ))}
-      {tab === "structures" && (structures.isLoading ? <SkeletonRows /> : !structures.data?.length ? <div className="panel"><EmptyState text={t("farm.structuresEmpty")} /></div> : (
+      )}
+      {structures.isLoading ? <SkeletonRows /> : !structures.data?.length ? <div className="panel"><EmptyState text={t("farm.structuresEmpty")} /></div> : (
         <Table
           rows={structures.data}
           rowKey={(s) => s.id}
@@ -173,12 +185,9 @@ export function FarmPage() {
             ...(canWrite ? [{ key: "e", header: <span className="visually-hidden">{t("common.edit")}</span>, label: "", render: (s: Structure) => <Button variant="quiet" size="sm" icon={<Pencil size={14} />} onClick={() => setEditStructure(s)}>{t("common.edit")}</Button> }] : []),
           ]}
         />
-      ))}
-      {panel === "plot" && <PlotPanel onClose={() => setPanel(null)} />}
-      {panel === "structure" && <StructurePanel onClose={() => setPanel(null)} />}
-      {editPlot && <PlotPanel plot={editPlot} onClose={() => setEditPlot(null)} />}
+      )}
+      {adding && <StructurePanel onClose={() => setAdding(false)} />}
       {editStructure && <StructurePanel structure={editStructure} onClose={() => setEditStructure(null)} />}
-      {history && <PlotHistoryPanel plot={history} onClose={() => setHistory(null)} />}
-    </>
+    </div>
   );
 }

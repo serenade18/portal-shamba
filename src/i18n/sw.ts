@@ -124,7 +124,6 @@ const sw: Record<keyof typeof en, string> = {
   "state.goHome": "Nenda kwenye muhtasari",
 
   "nav.dashboard": "Muhtasari",
-  "nav.farm": "Shamba",
   "nav.animals": "Mifugo",
   "nav.poultry": "Kuku na samaki",
   "nav.crops": "Mazao",
@@ -452,7 +451,7 @@ const sw: Record<keyof typeof en, string> = {
   "season.date": "Tarehe ya kupanda",
   "season.name": "Jina",
   "season.started": "Msimu umeanzishwa",
-  "season.noPlots": "Ongeza kipande cha shamba kwanza kwenye Shamba, kisha uanze msimu juu yake.",
+  "season.noPlots": "Ongeza kipande cha shamba kwanza kwenye Mipangilio → Vipande, kisha uanze msimu juu yake.",
 
   "act.title": "Rekodi kazi",
   "act.type": "Kazi",
@@ -727,7 +726,6 @@ const sw: Record<keyof typeof en, string> = {
   "cond.rain": "Mvua",
   "cond.heavy_rain": "Mvua kubwa",
 
-  "farm.title": "Shamba",
   "farm.plots": "Vipande",
   "farm.structures": "Majengo",
   "farm.addPlot": "Ongeza kipande",

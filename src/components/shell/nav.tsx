@@ -1,4 +1,4 @@
-import { CloudSun, Egg, HandCoins, LayoutDashboard, PawPrint, Settings, ShoppingCart, Tractor, Wallet, Warehouse, Wheat } from "lucide-react";
+import { CloudSun, Egg, HandCoins, LayoutDashboard, PawPrint, Settings, ShoppingCart, Wallet, Warehouse, Wheat } from "lucide-react";
 import type { ComponentType } from "react";
 import { useNavigation } from "@/api/hooks";
 import type { MsgKey } from "@/i18n";
@@ -24,7 +24,6 @@ export function useNavItems(): { main: NavItem[]; bottom: NavItem[]; ready: bool
 
   const main: (NavItem | false)[] = [
     { to: "/", label: "nav.dashboard", icon: LayoutDashboard },
-    !worker && { to: "/farm", label: "nav.farm", icon: Tractor },
     modules.includes("livestock") && { to: "/animals", label: "nav.animals", icon: PawPrint },
     modules.includes("batches") && { to: "/poultry", label: "nav.poultry", icon: Egg },
     modules.includes("crops") && { to: "/crops", label: "nav.crops", icon: Wheat },
