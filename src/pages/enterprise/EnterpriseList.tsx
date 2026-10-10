@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { PageHead, Table, type Column } from "@/components/ui/data";
 import { EmptyState, ErrorState, ModuleHidden, SkeletonRows } from "@/components/ui/feedback";
 import { useQty, useT, type MsgKey } from "@/i18n";
+import { batchesLabel, modulesOf } from "@/lib/enterpriseTypes";
 import { formatDate } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { SchedulePanel } from "./BatchPanels";
@@ -32,10 +33,11 @@ export function EnterpriseList({ module }: { module: Module }) {
   const [scheduling, setScheduling] = useState(false);
   const meta = TITLES[module];
 
-  if (nav.data && !nav.data.modules.includes(module)) return <ModuleHidden typeLabel={t(meta.title)} />;
+  if (nav.data && !nav.data.modules.includes(module)) return <ModuleHidden typeLabel={module === "batches" ? t(batchesLabel(nav.data.types)) : t(meta.title)} />;
 
-  const types = (nav.data?.types ?? []).filter((c) => catalogue.data?.enterprise_types.find((x) => x.code === c)?.module === module) as TypeCode[];
   const typeInfo = (code: TypeCode) => catalogue.data?.enterprise_types.find((x) => x.code === code);
+  const types = (nav.data?.types ?? []).filter((c) => modulesOf(typeInfo(c)).includes(module)) as TypeCode[];
+  const title = module === "batches" ? t(batchesLabel(nav.data?.types ?? [])) : t(meta.title);
 
   const columns: Column<Enterprise>[] = [
     {
@@ -70,10 +72,10 @@ export function EnterpriseList({ module }: { module: Module }) {
   return (
     <>
       <PageHead
-        title={t(meta.title)}
+        title={title}
         actions={types.length > 0 && (
           <>
-            {module === "batches" && canSchedule && <Button onClick={() => setScheduling(true)}>{t("vacc.scheduleTitle")}</Button>}
+            {module !== "crops" && canSchedule && <Button onClick={() => setScheduling(true)}>{t("vacc.scheduleTitle")}</Button>}
             {meta.start && canRecord && (
               <Button variant="primary" icon={<Plus size={18} />} onClick={() => setStarting(true)}>
                 {t(meta.start)}

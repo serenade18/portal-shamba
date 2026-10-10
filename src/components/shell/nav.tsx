@@ -1,7 +1,8 @@
-import { CloudSun, Egg, HandCoins, LayoutDashboard, PawPrint, Settings, ShoppingCart, Wallet, Warehouse, Wheat } from "lucide-react";
+import { CloudSun, Egg, HandCoins, LayoutDashboard, PawPrint, Satellite, Settings, ShoppingCart, Wallet, Warehouse, Wheat } from "lucide-react";
 import type { ComponentType } from "react";
 import { useNavigation } from "@/api/hooks";
 import type { MsgKey } from "@/i18n";
+import { batchesLabel } from "@/lib/enterpriseTypes";
 import { useCan, useMembership } from "@/stores/session";
 
 export interface NavItem {
@@ -25,8 +26,9 @@ export function useNavItems(): { main: NavItem[]; bottom: NavItem[]; ready: bool
   const main: (NavItem | false)[] = [
     { to: "/", label: "nav.dashboard", icon: LayoutDashboard },
     modules.includes("livestock") && { to: "/animals", label: "nav.animals", icon: PawPrint },
-    modules.includes("batches") && { to: "/poultry", label: "nav.poultry", icon: Egg },
+    modules.includes("batches") && { to: "/poultry", label: batchesLabel(nav.data?.types ?? []), icon: Egg },
     modules.includes("crops") && { to: "/crops", label: "nav.crops", icon: Wheat },
+    modules.includes("crops") && { to: "/crop-health", label: "nav.cropHealth", icon: Satellite },
     stock && { to: "/stock", label: "nav.stock", icon: Warehouse },
     money && { to: "/sales", label: "nav.sales", icon: HandCoins },
     money && { to: "/purchases", label: "nav.purchases", icon: ShoppingCart },

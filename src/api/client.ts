@@ -27,7 +27,10 @@ const IMPLEMENTED = [
   /^\/dashboard$/,
   /^\/items(\/([0-9a-f-]{36}|suggestions))?$/,
   /^\/enterprises(\/[0-9a-f-]{36}(\/(records|health|production|close-summary|close))?)?$/,
-  /^\/animals(\/[0-9a-f-]{36}(\/(exit|breeding|births|weights))?)?$/,
+  /^\/animals(\/[0-9a-f-]{36}(\/(exit|breeding|births|weights|schedule))?)?$/,
+  /^\/breeding\/[0-9a-f-]{36}\/check$/,
+  /^\/herds\/[0-9a-f-]{36}\/(vaccinations|breeding-calendar)$/,
+  /^\/crop-health(\/scenes\/[0-9a-f-]{36}\/image)?$/,
   /^\/(milk-records|feeding-records|treatments)$/,
   /^\/batches(\/[0-9a-f-]{36}\/(days|weights|vaccinations))?$/,
   /^\/vaccination-schedules$/,
@@ -181,6 +184,27 @@ export async function api<T>(method: string, path: string, opts: RequestOptions 
     });
   }
   return res.body as T;
+}
+
+/**
+ * An image the API serves only to signed-in callers (satellite scenes), as a URL for <img>.
+ * `path` is what the API returned, with or without the /api/v1 prefix. The caller revokes
+ * blob: URLs it no longer shows.
+ */
+export async function imageUrl(path: string): Promise<string> {
+  const [rawPath, qs = ""] = path.split("?");
+  const p = rawPath!.replace(/^.*\/api\/v1/, "");
+  const fetchOnce = async () => {
+    const req = buildRequest("GET", p, {});
+    new URLSearchParams(qs).forEach((v, k) => req.query.set(k, v));
+    if (shouldMock(p)) return { status: 200, url: (await (await loadMock())(req)).body as string };
+    const res = await fetch(`${BASE}${p}?${req.query.toString()}`, { headers: req.headers });
+    return { status: res.status, url: res.ok ? URL.createObjectURL(await res.blob()) : "" };
+  };
+  let res = await fetchOnce();
+  if (res.status === 401 && (await refreshAccess())) res = await fetchOnce();
+  if (!res.url) throw new ApiError(res.status, { code: `http_${res.status}`, message: "", params: {}, fields: {} });
+  return res.url;
 }
 
 export const http = {

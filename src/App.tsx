@@ -31,6 +31,8 @@ import { SalesPage } from "./pages/sales/SalesPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { StockPage } from "./pages/stock/StockPage";
 import { WeatherPage } from "./pages/weather/WeatherPage";
+import { CropHealthPage } from "./pages/crophealth/CropHealthPage";
+import { EnterpriseRedirect } from "./pages/enterprise/EnterpriseRedirect";
 import { useMembership, useSession } from "./stores/session";
 
 function RequireAuth() {
@@ -127,6 +129,8 @@ const router = createBrowserRouter([
               { path: "/purchases", element: <PurchasesPage /> },
               { path: "/money", element: <MoneyPage /> },
               { path: "/weather", element: <WeatherPage /> },
+              { path: "/crop-health", element: <CropHealthPage /> },
+              { path: "/e/:id", element: <EnterpriseRedirect /> },
               { path: "/alerts", element: <AlertsPage /> },
               { path: "/settings", element: <SettingsPage /> },
               { path: "*", element: <NotFound /> },

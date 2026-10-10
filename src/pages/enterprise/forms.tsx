@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import * as api from "@/api/endpoints";
-import { fieldErrors, useCatalogue, useErrorText, useFarmId, useItems, useKey } from "@/api/hooks";
+import { fieldErrors, useCatalogue, useEnterprises, useErrorText, useFarmId, useItems, useKey } from "@/api/hooks";
 import type { ActivityType, Animal, EnterpriseDetail, Item, ItemCategory, TypeCode, VaccinationPlanStep } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/data";
@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/feedback";
 import { ChoiceCards, DateField, FormError, MoneyField, QuantityField, SelectField, TextField } from "@/components/ui/forms";
 import { SidePanel } from "@/components/ui/overlay";
 import { useT, type MsgKey } from "@/i18n";
+import { GRAINS, HEAD_UNIT, isMixed, isPerennial } from "@/lib/enterpriseTypes";
 import { today } from "@/lib/format";
 import { useCan, useSession } from "@/stores/session";
 import { toast } from "@/stores/toast";
@@ -85,7 +86,7 @@ export function RecordDayPanel({ ent, onClose }: { ent: EnterpriseDetail; onClos
           <SelectField label={t("feed.item")} value={feed?.id ?? ""} onChange={(v) => setFeedId(v)} options={feeds.map((f) => ({ value: f.id, label: f.name[t.locale] }))} />
           <QuantityField label={`🌾 ${t("day.feed")}`} value={feedQty} onChange={setFeedQty} unit={feedUnit} onUnitChange={setFeedUnit} units={feed?.units ?? ["bag"]} />
         </div>
-        <QuantityField label={`✝ ${ent.type === "fish" ? t("day.deathsFish") : t("day.deaths")}`} value={deaths} onChange={setDeaths} unit={ent.type === "fish" ? "fish" : "bird"} units={[ent.type === "fish" ? "fish" : "bird"]} error={err.deaths ?? server.deaths} />
+        <QuantityField label={`✝ ${ent.type === "fish" ? t("day.deathsFish") : HEAD_UNIT[ent.type] === "bird" ? t("day.deaths") : t("day.deathsAnimals")}`} value={deaths} onChange={setDeaths} unit={HEAD_UNIT[ent.type] ?? "bird"} units={[HEAD_UNIT[ent.type] ?? "bird"]} error={err.deaths ?? server.deaths} />
         <TextField label={t("common.note")} value={note} onChange={setNote} optional />
         <FormError message={save.error ? errorText(save.error) : null} />
       </div>
@@ -150,7 +151,10 @@ export function RecordFeedPanel({ ent, onClose }: { ent: EnterpriseDetail; onClo
   );
 }
 
-/** With `step`, the dose is that step of the batch's vaccination schedule (BAT-04). */
+/**
+ * With `step`, the dose is that step of the vaccination schedule (BAT-04, LIV-04): a batch's
+ * step by its day, a herd's by its key, given to the step's animal or the whole herd.
+ */
 export function RecordTreatmentPanel({ ent, animals, step, onClose }: { ent: EnterpriseDetail; animals: Animal[]; step?: VaccinationPlanStep; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
@@ -162,9 +166,16 @@ export function RecordTreatmentPanel({ ent, animals, step, onClose }: { ent: Ent
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState(item?.display_unit ?? "dose");
   const [dose, setDose] = useState(step ? step.vaccine : "");
-  const [subject, setSubject] = useState("");
+  const [animalId, setAnimalId] = useState(step?.animal_id ?? "");
+  const animal = animals.find((a) => a.id === animalId);
   const save = useSave(
-    () => api.livestock.recordTreatment({ enterprise_id: ent.id, date, item_id: item!.id, qty, unit, dose_note: dose, subject: subject || t("treat.wholeGroup"), schedule_day: step?.day ?? null }),
+    () =>
+      api.livestock.recordTreatment({
+        enterprise_id: ent.id, date, item_id: item!.id, qty, unit, dose_note: dose,
+        subject: animal ? `${animal.tag} ${animal.name}`.trim() : step?.animal_tag ?? "",
+        ...(step?.key ? { schedule_key: step.key } : { schedule_day: step?.day ?? null }),
+        animal_id: animalId || null,
+      }),
     "treat.saved",
     onClose,
   );
@@ -176,8 +187,10 @@ export function RecordTreatmentPanel({ ent, animals, step, onClose }: { ent: Ent
         <SelectField label={`💉 ${t("treat.product")}`} value={item?.id ?? ""} onChange={(v) => (setItemId(v), setUnit(drugs.find((d) => d.id === v)?.display_unit ?? "dose"))} options={drugs.map((f) => ({ value: f.id, label: f.name[t.locale] }))} />
         <QuantityField label={t("common.quantity")} value={qty} onChange={setQty} unit={unit} onUnitChange={setUnit} units={item?.units ?? ["dose"]} error={err.qty ? t("sale.qtyError") : undefined} />
         <TextField label={t("treat.dose")} value={dose} onChange={setDose} placeholder={t("treat.dosePlaceholder")} optional />
-        {animals.length > 0 ? (
-          <SelectField label={t("treat.subject")} value={subject} onChange={setSubject} placeholder={t("treat.wholeGroup")} options={animals.filter((a) => a.status === "active").map((a) => ({ value: `${a.tag} ${a.name}`, label: `${a.tag} ${a.name}` }))} />
+        {step?.animal_tag ? (
+          <p className="small">{t("treat.forAnimal", { tag: step.animal_tag })}</p>
+        ) : animals.length > 0 && step?.kind !== "every" ? (
+          <SelectField label={t("treat.subject")} value={animalId} onChange={setAnimalId} placeholder={t("treat.wholeGroup")} options={animals.filter((a) => a.status === "active").map((a) => ({ value: a.id, label: `${a.tag} ${a.name}`.trim() }))} />
         ) : null}
         <FormError message={save.error ? errorText(save.error) : null} />
       </div>
@@ -185,13 +198,27 @@ export function RecordTreatmentPanel({ ent, animals, step, onClose }: { ent: Ent
   );
 }
 
+/** Pigs and rabbits can also join from a batch of growers: kept for breeding, they leave that batch. */
 export function AddAnimalPanel({ ent, animals, onClose }: { ent: EnterpriseDetail; animals: Animal[]; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
   const money = useCan("money.read");
-  const [f, setF] = useState({ tag: "", name: "", sex: "female" as "female" | "male", breed: "", birth_date: "", source: "bought" as "born" | "bought", cost: "", mother_id: "" });
+  const catalogue = useCatalogue();
+  const mixed = isMixed(catalogue.data?.enterprise_types.find((x) => x.code === ent.type));
+  const batches = useEnterprises("batches");
+  const growers = (batches.data ?? []).filter((b) => mixed && b.type === ent.type && b.status === "active" && (b.head_count ?? 0) > 0);
+  const [f, setF] = useState({ tag: "", name: "", sex: "female" as "female" | "male", breed: "", birth_date: "", source: "bought" as "born" | "bought" | "batch", cost: "", mother_id: "", from_batch_id: "" });
   const set = <K extends keyof typeof f>(k: K) => (v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
-  const save = useSave(() => api.livestock.createAnimal({ enterprise_id: ent.id, ...f, birth_date: f.birth_date || null, cost: f.cost || null, mother_id: f.source === "born" ? f.mother_id || null : null }), "animal.saved", onClose);
+  const fromBatch = f.source === "batch";
+  const save = useSave(
+    () =>
+      api.livestock.createAnimal({
+        enterprise_id: ent.id, ...f, source: f.source === "batch" ? "born" : f.source, birth_date: f.birth_date || null, cost: fromBatch ? null : f.cost || null,
+        mother_id: f.source !== "bought" ? f.mother_id || null : null, from_batch_id: fromBatch ? f.from_batch_id || null : null,
+      }),
+    "animal.saved",
+    onClose,
+  );
   const err = fieldErrors(save.error);
   const mothers = animals.filter((a) => a.sex === "female" && a.status === "active");
   return (
@@ -202,8 +229,11 @@ export function AddAnimalPanel({ ent, animals, onClose }: { ent: EnterpriseDetai
         <ChoiceCards label={t("animal.sex")} value={f.sex} onChange={set("sex")} options={[{ value: "female", label: t("sex.female") }, { value: "male", label: t("sex.male") }]} />
         <TextField label={t("animal.breed")} value={f.breed} onChange={set("breed")} optional />
         <DateField label={t("animal.birth")} value={f.birth_date} onChange={set("birth_date")} max={today()} />
-        <ChoiceCards label={t("animal.source")} value={f.source} onChange={set("source")} options={[{ value: "bought", label: t("source.bought") }, { value: "born", label: t("source.born") }]} />
-        {f.source === "born" && mothers.length > 0 && (
+        <ChoiceCards label={t("animal.source")} value={f.source} onChange={set("source")} options={[{ value: "bought", label: t("source.bought") }, { value: "born", label: t("source.born") }, ...(growers.length ? [{ value: "batch" as const, label: t("source.batch") }] : [])]} />
+        {fromBatch && (
+          <SelectField className="span-2" label={t("animal.fromBatch")} value={f.from_batch_id} onChange={set("from_batch_id")} placeholder="" options={growers.map((b) => ({ value: b.id, label: t("animal.fromBatchOption", { name: b.name, n: b.head_count ?? 0 }) }))} error={err.from_batch_id} hint={t("animal.fromBatchHint")} />
+        )}
+        {f.source !== "bought" && mothers.length > 0 && (
           <SelectField className="span-2" label={t("animal.mother")} value={f.mother_id} onChange={set("mother_id")} placeholder="" options={mothers.map((a) => ({ value: a.id, label: `${a.tag} ${a.name}` }))} optional />
         )}
         {f.source === "bought" && money && <MoneyField className="span-2" label={t("animal.cost")} value={f.cost} onChange={set("cost")} optional />}
@@ -235,7 +265,7 @@ export function AnimalExitPanel({ animal, onClose }: { animal: Animal; onClose: 
   );
 }
 
-const ACTIVITIES: ActivityType[] = ["land_preparation", "planting", "weeding", "spraying", "fertilising", "other"];
+const ACTIVITIES: ActivityType[] = ["land_preparation", "planting", "transplanting", "weeding", "spraying", "fertilising", "irrigation", "pruning", "other"];
 
 export function RecordActivityPanel({ ent, onClose }: { ent: EnterpriseDetail; onClose: () => void }) {
   const t = useT();
@@ -293,12 +323,17 @@ export function RecordActivityPanel({ ent, onClose }: { ent: EnterpriseDetail; o
   );
 }
 
+/** Counted in the crop's own units: bags of grain, crates of tomatoes, bunches of bananas. */
 export function RecordHarvestPanel({ ent, onClose }: { ent: EnterpriseDetail; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
+  const items = useItems();
+  const output = items.data?.find((i) => i.kind === "output" && i.produced_by.includes(ent.type));
+  const grain = GRAINS.includes(ent.type);
   const [date, setDate] = useState(today());
   const [qty, setQty] = useState("");
-  const [unit, setUnit] = useState("bag");
+  const [chosenUnit, setUnit] = useState<string | null>(null);
+  const unit = chosenUnit ?? output?.display_unit ?? "kg";
   const [moisture, setMoisture] = useState<"green" | "dry">("dry");
   const save = useSave(() => api.crops.recordHarvest(ent.id, { date, qty, unit, moisture }), "harv.saved", onClose);
   const err = fieldErrors(save.error);
@@ -306,8 +341,8 @@ export function RecordHarvestPanel({ ent, onClose }: { ent: EnterpriseDetail; on
     <SidePanel title={t("harv.title")} onClose={onClose} onSubmit={() => save.mutate(undefined)} footer={<Footer onClose={onClose} loading={save.isPending} label={t("common.save")} />}>
       <div className="stack">
         <DateField label={t("common.date")} value={date} onChange={setDate} max={today()} />
-        <QuantityField label={`🌽 ${t("common.quantity")}`} value={qty} onChange={setQty} unit={unit} onUnitChange={setUnit} units={["bag", "kg"]} error={err.qty ? t("sale.qtyError") : undefined} />
-        <ChoiceCards label={t("harv.condition")} value={moisture} onChange={setMoisture} options={[{ value: "dry", label: t("moisture.dry") }, { value: "green", label: t("moisture.green") }]} />
+        <QuantityField label={t("common.quantity")} value={qty} onChange={setQty} unit={unit} onUnitChange={setUnit} units={output?.units ?? ["bag", "kg"]} error={err.qty ? t("sale.qtyError") : err.unit} />
+        {grain && <ChoiceCards label={t("harv.condition")} value={moisture} onChange={setMoisture} options={[{ value: "dry", label: t("moisture.dry") }, { value: "green", label: t("moisture.green") }]} />}
         <FormError message={save.error ? errorText(save.error) : null} />
       </div>
     </SidePanel>
@@ -345,11 +380,11 @@ export function StartBatchPanel({ types, onClose, onStarted }: { types: TypeCode
           </div>
         )}
         <TextField className="span-2" label={t("batch.name")} value={f.name} onChange={set("name")} placeholder={`${label}, …`} optional />
-        <TextField label={type === "fish" ? t("batch.countFish") : t("batch.count")} value={f.count} onChange={(v) => set("count")(v.replace(/\D/g, ""))} inputMode="numeric" error={err.count} />
+        <TextField label={type === "fish" ? t("batch.countFish") : HEAD_UNIT[type] === "bird" ? t("batch.count") : t("batch.countAnimals")} value={f.count} onChange={(v) => set("count")(v.replace(/\D/g, ""))} inputMode="numeric" error={err.count} />
         <DateField label={t("batch.date")} value={f.date} onChange={set("date")} max={today()} />
-        <TextField label={t("batch.age")} value={f.age_days} onChange={(v) => set("age_days")(v.replace(/\D/g, ""))} inputMode="numeric" placeholder="0" hint={t("batch.ageHint")} error={err.age_days} optional />
+        <TextField label={t("batch.age")} value={f.age_days} onChange={(v) => set("age_days")(v.replace(/\D/g, ""))} inputMode="numeric" placeholder="0" hint={HEAD_UNIT[type] === "bird" ? t("batch.ageHint") : t("batch.ageHintAnimals")} error={err.age_days} optional />
         <TextField label={t("batch.source")} value={f.source} onChange={set("source")} placeholder={t("batch.sourcePlaceholder")} optional />
-        <SelectField label={t("batch.structure")} value={f.structure_id} onChange={set("structure_id")} placeholder="" options={(structures.data ?? []).filter((s) => s.type === "poultry_house" || s.type === "pond").map((s) => ({ value: s.id, label: s.name }))} optional />
+        <SelectField label={t("batch.structure")} value={f.structure_id} onChange={set("structure_id")} placeholder="" options={(structures.data ?? []).filter((s) => (HEAD_UNIT[type] === "bird" || type === "fish" ? s.type === "poultry_house" || s.type === "pond" : s.type === "pen" || s.type === "shed")).map((s) => ({ value: s.id, label: s.name }))} optional />
         {money && <MoneyField className="span-2" label={t("batch.cost")} value={f.cost} onChange={set("cost")} optional />}
         <div className="span-2">
           <FormError message={save.error ? errorText(save.error) : null} />
@@ -368,13 +403,14 @@ export function StartSeasonPanel({ types, onClose, onStarted }: { types: TypeCod
   const invalidate = useInvalidateOrg();
   const plots = useQuery({ queryKey: key("plots", farmId), queryFn: () => api.farms.plots(farmId), select: (p) => p.results });
   const [type, setType] = useState<TypeCode>(types[0]!);
-  const [f, setF] = useState({ plot_id: "", variety: "", area_acres: "", date: today(), name: "" });
+  const [f, setF] = useState({ plot_id: "", variety: "", area_acres: "", date: today(), name: "", plant_count: "" });
   const set = <K extends keyof typeof f>(k: K) => (v: string) => setF((s) => ({ ...s, [k]: v }));
   const plot = plots.data?.find((p) => p.id === f.plot_id);
+  const orchard = isPerennial(catalogue.data?.enterprise_types.find((x) => x.code === type));
   const cropName = catalogue.data?.enterprise_types.find((x) => x.code === type)?.labels.en ?? type;
   const defaultName = useMemo(() => `${cropName}, ${new Date(f.date).toLocaleString("en", { month: "short", year: "numeric" })}`, [cropName, f.date]);
   const save = useMutation({
-    mutationFn: () => api.crops.start({ farm_id: farmId, type, plot_id: f.plot_id, variety: f.variety, area_acres: f.area_acres || plot?.area_acres || "", date: f.date, name: f.name || defaultName }),
+    mutationFn: () => api.crops.start({ farm_id: farmId, type, plot_id: f.plot_id, variety: f.variety, area_acres: f.area_acres || plot?.area_acres || "", date: f.date, name: f.name || defaultName, plant_count: f.plant_count ? Number(f.plant_count) : null }),
     onSuccess: (e) => {
       invalidate();
       toast(t("season.started"));
@@ -397,7 +433,8 @@ export function StartSeasonPanel({ types, onClose, onStarted }: { types: TypeCod
           <SelectField label={t("season.plot")} value={f.plot_id} onChange={set("plot_id")} placeholder="" options={plots.data.map((p) => ({ value: p.id, label: `${p.name} (${p.area_acres} ac)` }))} error={err.plot_id} />
           <TextField label={t("season.area")} value={f.area_acres} onChange={(v) => set("area_acres")(v.replace(/[^\d.]/g, ""))} inputMode="decimal" placeholder={plot?.area_acres} error={err.area_acres} />
           <TextField label={t("season.variety")} value={f.variety} onChange={set("variety")} optional />
-          <DateField label={t("season.date")} value={f.date} onChange={set("date")} />
+          <TextField label={orchard ? t("season.trees") : t("season.plants")} value={f.plant_count} onChange={(v) => set("plant_count")(v.replace(/\D/g, ""))} inputMode="numeric" hint={orchard ? t("season.treesHint") : undefined} error={err.plant_count} optional />
+          <DateField label={t("season.date")} value={f.date} onChange={set("date")} max={today()} />
           <TextField className="span-2" label={t("season.name")} value={f.name} onChange={set("name")} placeholder={defaultName} optional />
           <div className="span-2">
             <FormError message={save.error ? errorText(save.error) : null} />
@@ -415,7 +452,9 @@ export function ClosePanel({ ent, onClose }: { ent: EnterpriseDetail; onClose: (
   const errorText = useErrorText();
   const summary = useQuery({ queryKey: key("close-summary", ent.id), queryFn: () => api.enterprises.closeSummary(ent.id) });
   const isSeason = ent.module === "crops";
-  const save = useSave(() => api.enterprises.close(ent.id), isSeason ? "close.doneSeason" : "close.doneBatch", onClose);
+  const catalogue = useCatalogue();
+  const orchard = isPerennial(catalogue.data?.enterprise_types.find((x) => x.code === ent.type));
+  const save = useSave(() => api.enterprises.close(ent.id), orchard ? "close.doneOrchard" : isSeason ? "close.doneSeason" : "close.doneBatch", onClose);
   const s = summary.data;
   return (
     <SidePanel
@@ -425,13 +464,13 @@ export function ClosePanel({ ent, onClose }: { ent: EnterpriseDetail; onClose: (
         <>
           <Button onClick={onClose}>{t("common.cancel")}</Button>
           <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(undefined)} disabled={!s}>
-            {isSeason ? t("close.confirmSeason") : t("close.confirmBatch")}
+            {orchard ? t("close.confirmOrchard") : isSeason ? t("close.confirmSeason") : t("close.confirmBatch")}
           </Button>
         </>
       }
     >
       <div className="stack-lg">
-        <p className="muted">{t("close.help")}</p>
+        <p className="muted">{orchard ? t("close.helpOrchard") : t("close.help")}</p>
         {!s ? (
           <Skeleton height={200} />
         ) : (

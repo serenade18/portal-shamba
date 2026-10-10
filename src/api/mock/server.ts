@@ -8,7 +8,7 @@ import { useSession } from "@/stores/session";
 import { MOCK_MODE, sendNetwork, type RawRequest } from "../client";
 import { boundaryProblem, fromPolygon, hectares, toPolygon } from "@/lib/geo";
 import type * as T from "../types";
-import { CATALOGUE, GESTATION_DAYS, TYPE_FEED, TYPE_ITEMS, TYPE_OUTPUT, typeInfo, VACCINATION_DEFAULTS } from "./catalogue";
+import { BREEDING, CATALOGUE, GESTATION_DAYS, ITEM_DEFS, LIVE_OUTPUTS, stepKey, TYPE_FEED, TYPE_ITEMS, TYPE_OUTPUT, typeInfo, VACCINATION_DEFAULTS } from "./catalogue";
 import * as cmd from "./commands";
 import {
   addDays, balanceOf, balances, daysAgo, daysBetween, emptyOrgData, entriesFor, factorFor, getDb, inRange,
@@ -559,7 +559,7 @@ route("PATCH", "/farms/:id", (ctx) => {
 function navigation(ctx: Ctx, farmId: string): T.Navigation {
   const f = farmOf(ctx, farmId);
   const types = data(ctx).picks[farmId] ?? [];
-  const modules = [...new Set(types.map((t) => typeInfo(t).module))];
+  const modules = [...new Set(types.flatMap((t) => (typeInfo(t).tracking_mode === "mixed" ? [typeInfo(t).module, "batches" as const] : [typeInfo(t).module])))];
   return { farm_id: farmId, modules, types, setup_complete: f.setup_complete };
 }
 route("GET", "/navigation", (ctx) => navigation(ctx, ctx.q.get("farm_id") ?? ""));
@@ -575,12 +575,13 @@ function defaultNames(type: T.TypeCode, locale: T.Locale) {
   const label = info.labels[locale];
   const lower = label.charAt(0).toLowerCase() + label.slice(1);
   if (locale === "sw") {
-    return { herd: `Kundi la ${lower}`, batch: `${label}, kundi la 1`, plot: `Shamba la ${lower}`, season: `${label}, ${SEASON_NAME().sw}` };
+    return { herd: `Kundi la ${lower}`, batch: `${label}, kundi la 1`, plot: `Shamba la ${lower}`, season: `${label}, ${SEASON_NAME().sw}`, orchard: `Bustani ya ${lower}` };
   }
   if (locale === "fr") {
-    return { herd: `Troupeau de ${lower}`, batch: `${label}, lot 1`, plot: `Champ de ${lower}`, season: `${label}, ${SEASON_NAME().fr}` };
+    const de = /^[aeiouéèêâîôû]/.test(lower) ? "d'" : "de ";
+    return { herd: `Troupeau ${de}${lower}`, batch: `${label}, lot 1`, plot: `Champ ${de}${lower}`, season: `${label}, ${SEASON_NAME().fr}`, orchard: `Verger ${de}${lower}` };
   }
-  return { herd: `${label} herd`.replace("cows herd", "herd"), batch: `${label}, batch 1`, plot: `${label} field`, season: `${label}, ${SEASON_NAME().en}` };
+  return { herd: `${label} herd`.replace("cows herd", "herd"), batch: `${label}, batch 1`, plot: `${label} field`, season: `${label}, ${SEASON_NAME().en}`, orchard: `${label} orchard` };
 }
 
 function createEnterprisesFor(ctx: Ctx, farmId: string, types: T.TypeCode[], counts: Partial<Record<T.TypeCode, number>>) {
@@ -602,7 +603,7 @@ function createEnterprisesFor(ctx: Ctx, farmId: string, types: T.TypeCode[], cou
       const acres = count && count > 0 ? count : 1;
       const plot = { id: crypto.randomUUID(), farm_id: farmId, name: names.plot, area_acres: acres.toFixed(2), tenure: "owned" as const, lease_cost: null, growing_now: null };
       d.plots.push(plot);
-      cmd.startEnterprise(d, { farm: farmId, type, name: names.season, date: today, plot: plot.id, area: acres, by });
+      cmd.startEnterprise(d, { farm: farmId, type, name: info.tracking_mode === "perennial" ? names.orchard : names.season, date: today, plot: plot.id, area: acres, by });
     }
   }
 }
@@ -652,11 +653,12 @@ route("GET", "/plots/:id/history", (ctx) => {
     .filter((e) => e.plot_id === ctx.params.id)
     .sort((a, b) => b.started_on.localeCompare(a.started_on))
     .map((e): T.PlotSeasonHistory => {
-      const harvested = d.harvests.filter((h) => h.enterprise_id === e.id).reduce((s, h) => s + h.qty * (h.unit === "bag" ? 1 : 1 / 90), 0);
+      const { unit, per } = yieldUnit(e.type);
+      const harvested = d.harvests.filter((h) => h.enterprise_id === e.id).reduce((s, h) => s + (h.qty * outputFactor(e.type, h.unit)) / per, 0);
       const all = d.finance.filter((f) => f.enterprise_id === e.id);
       return {
         enterprise_id: e.id, name: e.name, crop: e.type, started_on: e.started_on, closed_on: e.closed_on,
-        yield_per_acre: harvested > 0 && e.area_acres ? (harvested / Number(e.area_acres)).toFixed(1) : null, yield_unit: "bag",
+        yield_per_acre: harvested > 0 && e.area_acres ? (harvested / Number(e.area_acres)).toFixed(1) : null, yield_unit: unit,
         profit: m$(ctx, sumBy(all, "revenue", true) - sumBy(all, "cost", true)),
       };
     });
@@ -709,6 +711,34 @@ function lifetime(d: OrgData, e: MEnterprise) {
   return { cost: sumBy(all, "cost", true), revenue: sumBy(all, "revenue", true) };
 }
 
+/** A crop's output item factor for a unit (kg in a crate...). */
+function outputFactor(type: T.TypeCode, unit: string): number {
+  const def = ITEM_DEFS[TYPE_OUTPUT[type]?.item ?? ""];
+  return def?.units.find((u) => u.code === unit)?.factor ?? 1;
+}
+
+/** The unit a crop's yield shows in, and how many base units are in one: bags, crates, bunches, kg. */
+function yieldUnit(type: T.TypeCode): { unit: string; per: number } {
+  const def = ITEM_DEFS[TYPE_OUTPUT[type]?.item ?? ""];
+  return { unit: def?.display_unit ?? "kg", per: def?.units.find((u) => u.code === def.display_unit)?.factor ?? 1 };
+}
+
+const PLURAL: Record<string, string> = { bag: "bags", crate: "crates", bunch: "bunches", kg: "kg" };
+const HEADS: Partial<Record<T.TypeCode, string>> = { broilers: "birds", fish: "fish", pigs: "pigs", rabbits: "rabbits" };
+
+function breedingKpis(d: OrgData, e: MEnterprise, end: string): T.Kpi[] {
+  const ids = new Set(d.animals.filter((a) => a.enterprise_id === e.id && a.status === "active").map((a) => a.id));
+  const events = d.breeding.filter((b) => ids.has(b.animal_id));
+  const out: T.Kpi[] = [{ code: "pregnant", value: String(new Set(events.filter((b) => !b.outcome && b.pregnant !== false).map((b) => b.animal_id)).size), unit: "" }];
+  if (typeInfo(e.type).tracking_mode === "mixed") {
+    const litters = events.filter((b) => b.outcome === "born" && b.born_alive != null && b.birth_date && inRange(b.birth_date, addDays(end, -364), end));
+    const alive = litters.reduce((s, b) => s + (b.born_alive ?? 0), 0);
+    out.push({ code: "litters_12m", value: String(litters.length), unit: "" });
+    out.push({ code: "born_alive_per_litter", value: litters.length ? (alive / litters.length).toFixed(1) : "0", unit: "" });
+  }
+  return out;
+}
+
 function kpis(ctx: Ctx, e: MEnterprise): T.Kpi[] {
   const d = data(ctx);
   const end = e.closed_on ?? isoDate(new Date());
@@ -718,47 +748,50 @@ function kpis(ctx: Ctx, e: MEnterprise): T.Kpi[] {
   const life = lifetime(d, e);
   const deathsTotal = (e.start_count ?? 0) - (e.head_count ?? 0) - soldBirds(d, e);
   const mortality = e.start_count ? (deathsTotal / e.start_count) * 100 : 0;
+  const animals = () => String(d.animals.filter((a) => a.enterprise_id === e.id && a.status === "active").length || (e.head_count ?? 0));
   const out: T.Kpi[] = [];
-  switch (e.type) {
-    case "layers": {
-      const trays7 = producedIn(d, e, w, end);
-      const trays30 = producedIn(d, e, month, end);
-      out.push({ code: "laying_rate", value: e.head_count ? ((trays7 * 30) / 7 / e.head_count * 100).toFixed(0) : "0", unit: "%" });
-      out.push({ code: "feed_per_tray", value: trays30 ? (feedKg(d, e, month, end) / trays30).toFixed(1) : "0", unit: "kg" });
-      out.push({ code: "cost_per_tray", value: trays30 ? money(cost30 / trays30) : "0", unit: "KES", money: true });
-      out.push({ code: "mortality", value: mortality.toFixed(1), unit: "%" });
-      break;
-    }
-    case "broilers":
-    case "fish": {
-      out.push({ code: "alive", value: String(e.head_count ?? 0), unit: e.type === "fish" ? "fish" : "birds" });
-      out.push({ code: "age", value: String(daysBetween(e.started_on, end)), unit: "days" });
-      out.push({ code: "feed_used", value: feedKg(d, e, e.started_on, end).toFixed(0), unit: "kg" });
-      out.push({ code: "mortality", value: mortality.toFixed(1), unit: "%" });
-      out.push({ code: "cost_per_bird", value: e.start_count ? money(life.cost / Math.max(1, (e.head_count ?? 0) + soldBirds(d, e))) : "0", unit: "KES", money: true });
-      break;
-    }
-    case "dairy_cattle":
-    case "dairy_goats": {
-      const l7 = producedIn(d, e, w, end);
-      const l30 = producedIn(d, e, month, end);
-      out.push({ code: "milk_per_day", value: (l7 / 7).toFixed(1), unit: "l" });
-      out.push({ code: "animals", value: String(d.animals.filter((a) => a.enterprise_id === e.id && a.status === "active").length || (e.head_count ?? 0)), unit: "" });
-      out.push({ code: "cost_per_litre", value: l30 ? money(cost30 / l30) : "0", unit: "KES", money: true });
-      out.push({ code: "milk_30d", value: l30.toFixed(0), unit: "l" });
-      break;
-    }
-    case "beef_cattle":
-    case "sheep":
-      out.push({ code: "animals", value: String(d.animals.filter((a) => a.enterprise_id === e.id && a.status === "active").length || (e.head_count ?? 0)), unit: "" });
-      out.push({ code: "cost_to_date", value: money(life.cost), unit: "KES", money: true });
-      break;
-    default: {
-      const kg = producedIn(d, e, e.started_on, end);
-      const bags = kg / 90;
+  if (e.type === "layers") {
+    const trays7 = producedIn(d, e, w, end);
+    const trays30 = producedIn(d, e, month, end);
+    out.push({ code: "laying_rate", value: e.head_count ? ((trays7 * 30) / 7 / e.head_count * 100).toFixed(0) : "0", unit: "%" });
+    out.push({ code: "feed_per_tray", value: trays30 ? (feedKg(d, e, month, end) / trays30).toFixed(1) : "0", unit: "kg" });
+    out.push({ code: "cost_per_tray", value: trays30 ? money(cost30 / trays30) : "0", unit: "KES", money: true });
+    out.push({ code: "mortality", value: mortality.toFixed(1), unit: "%" });
+  } else if (e.module === "batches") {
+    out.push({ code: "alive", value: String(e.head_count ?? 0), unit: HEADS[e.type] ?? "" });
+    out.push({ code: "age", value: String(daysBetween(e.started_on, end) + (e.age_days ?? 0)), unit: "days" });
+    out.push({ code: "feed_used", value: feedKg(d, e, e.started_on, end).toFixed(0), unit: "kg" });
+    out.push({ code: "mortality", value: mortality.toFixed(1), unit: "%" });
+    out.push({ code: e.type === "broilers" || e.type === "fish" ? "cost_per_bird" : "cost_per_head", value: e.start_count ? money(life.cost / Math.max(1, (e.head_count ?? 0) + soldBirds(d, e))) : "0", unit: "KES", money: true });
+  } else if (e.type === "dairy_cattle" || e.type === "dairy_goats") {
+    const l7 = producedIn(d, e, w, end);
+    const l30 = producedIn(d, e, month, end);
+    out.push({ code: "milk_per_day", value: (l7 / 7).toFixed(1), unit: "l" });
+    out.push({ code: "animals", value: animals(), unit: "" });
+    out.push({ code: "cost_per_litre", value: l30 ? money(cost30 / l30) : "0", unit: "KES", money: true });
+    out.push({ code: "milk_30d", value: l30.toFixed(0), unit: "l" });
+    out.push(...breedingKpis(d, e, end));
+  } else if (e.module === "livestock") {
+    out.push({ code: "animals", value: animals(), unit: "" });
+    out.push({ code: "cost_to_date", value: money(life.cost), unit: "KES", money: true });
+    out.push(...breedingKpis(d, e, end));
+  } else {
+    const { unit, per } = yieldUnit(e.type);
+    const base = TYPE_OUTPUT[e.type]?.unit ?? "kg";
+    const toShown = (from: string) => (producedIn(d, e, from, end) * outputFactor(e.type, base)) / per;
+    if (typeInfo(e.type).tracking_mode === "perennial") {
+      const year = addDays(end, -364);
+      const made = toShown(year > e.started_on ? year : e.started_on);
       out.push({ code: "area", value: e.area_acres ?? "0", unit: "acres" });
-      out.push({ code: "harvested", value: bags.toFixed(1), unit: "bags" });
-      out.push({ code: "yield_per_acre", value: e.area_acres && Number(e.area_acres) > 0 ? (bags / Number(e.area_acres)).toFixed(1) : "0", unit: "bags" });
+      out.push({ code: "plants", value: String(e.plant_count ?? 0), unit: "" });
+      out.push({ code: "harvested_12m", value: made.toFixed(1), unit: PLURAL[unit] ?? unit });
+      out.push({ code: "yield_per_plant", value: e.plant_count ? (made / e.plant_count).toFixed(2) : "0", unit: PLURAL[unit] ?? unit });
+      out.push({ code: "cost_12m", value: money(sumBy(d.finance.filter((f) => f.enterprise_id === e.id && inRange(f.occurred_on, year, end)), "cost", true)), unit: "KES", money: true });
+    } else {
+      const made = toShown(e.started_on);
+      out.push({ code: "area", value: e.area_acres ?? "0", unit: "acres" });
+      out.push({ code: "harvested", value: made.toFixed(1), unit: PLURAL[unit] ?? unit });
+      out.push({ code: "yield_per_acre", value: e.area_acres && Number(e.area_acres) > 0 ? (made / Number(e.area_acres)).toFixed(1) : "0", unit: PLURAL[unit] ?? unit });
       out.push({ code: "cost_to_date", value: money(life.cost), unit: "KES", money: true });
     }
   }
@@ -766,7 +799,8 @@ function kpis(ctx: Ctx, e: MEnterprise): T.Kpi[] {
 }
 
 function soldBirds(d: OrgData, e: MEnterprise) {
-  return d.sales.flatMap((s) => s.lines).filter((l) => l.enterprise_id === e.id && l.item_id === cmd.itemId("live_broilers")).reduce((s, l) => s + l.qty, 0);
+  const live = LIVE_OUTPUTS.map(cmd.itemId);
+  return d.sales.flatMap((s) => s.lines).filter((l) => l.enterprise_id === e.id && live.includes(l.item_id)).reduce((s, l) => s + l.qty, 0);
 }
 
 route("GET", "/enterprises/:id", (ctx) => {
@@ -799,7 +833,7 @@ route("GET", "/enterprises/:id/health", (ctx) => {
   const rows = data(ctx).health
     .filter((h) => h.enterprise_id === ctx.params.id)
     .sort((a, b) => b.date.localeCompare(a.date))
-    .map((h) => ({ id: h.id, date: h.date, product: h.product, dose_note: h.dose_note, subject: h.subject, cost: m$(ctx, h.cost), recorded_by: recorder(ctx, h.recorded_by) }));
+    .map((h) => ({ id: h.id, date: h.date, product: h.product, dose_note: h.dose_note, subject: h.subject, animal_id: h.animal_id ?? null, schedule_key: h.schedule_key || null, cost: m$(ctx, h.cost), recorded_by: recorder(ctx, h.recorded_by) }));
   return paginate(rows, ctx.q, 30);
 });
 
@@ -851,7 +885,13 @@ route("POST", "/animals", (ctx) => {
   if (d.animals.some((a) => a.enterprise_id === e.id && a.tag.toLowerCase() === String(ctx.body.tag).toLowerCase() && a.status === "active")) {
     throw new MockError(400, "validation_error", "Another animal has this tag.", { tag: ["Another animal in this herd has this tag."] });
   }
-  const cost = can(ctx, "money.read") && ctx.body.cost ? Number(ctx.body.cost) : null;
+  if (ctx.body.from_batch_id) {
+    const batch = d.enterprises.find((x) => x.id === ctx.body.from_batch_id && x.farm_id === e.farm_id && x.type === e.type && x.module === "batches" && x.status === "active");
+    if (!batch) throw new MockError(400, "validation_error", "Check the highlighted fields.", { from_batch_id: ["Choose an open batch of the same animals on this farm."] });
+    if (!batch.head_count) throw new MockError(400, "validation_error", "Check the highlighted fields.", { from_batch_id: ["That batch has none left."] });
+    batch.head_count -= 1;
+  }
+  const cost = can(ctx, "money.read") && ctx.body.cost && !ctx.body.from_batch_id ? Number(ctx.body.cost) : null;
   const animal = {
     id: crypto.randomUUID(), enterprise_id: e.id, tag: ctx.body.tag, name: ctx.body.name ?? "", sex: ctx.body.sex, breed: ctx.body.breed ?? "",
     birth_date: ctx.body.birth_date || null, source: ctx.body.source ?? "bought", cost: cost != null ? money(cost) : null, status: "active" as const,
@@ -904,7 +944,17 @@ route("POST", "/treatments", (ctx) => {
   positive(ctx.body, "qty");
   const e = enterprise(ctx, ctx.body.enterprise_id);
   moduleEnabled(ctx, e.farm_id, e.type);
-  const h = cmd.treatment(data(ctx), e, { date: ctx.body.date, item: ctx.body.item_id, qty: Number(ctx.body.qty), unit: ctx.body.unit, dose: ctx.body.dose_note ?? "", subject: ctx.body.subject || "Whole herd", scheduleDay: ctx.body.schedule_day ?? null, by: me(ctx) });
+  const animal = ctx.body.animal_id ? data(ctx).animals.find((a) => a.id === ctx.body.animal_id && a.enterprise_id === e.id && a.status === "active") : null;
+  if (ctx.body.animal_id && !animal) throw new MockError(400, "validation_error", "Check the highlighted fields.", { animal_id: ["Choose an animal in this herd."] });
+  let key = String(ctx.body.schedule_key ?? "").trim() || (ctx.body.schedule_day != null ? `age:${ctx.body.schedule_day}` : "");
+  if (key && e.module === "livestock" && !stepsFor(ctx, e.type).steps.some((s) => stepKey(s) === key)) {
+    throw new MockError(400, "validation_error", "Check the highlighted fields.", { schedule_key: ["Choose a step of this vaccination schedule."] });
+  }
+  const day = key.startsWith("age:") ? Number(key.slice(4)) : null;
+  const h = cmd.treatment(data(ctx), e, {
+    date: ctx.body.date, item: ctx.body.item_id, qty: Number(ctx.body.qty), unit: ctx.body.unit, dose: ctx.body.dose_note ?? "",
+    subject: ctx.body.subject || animal?.tag || (e.module === "livestock" ? "Whole herd" : "Whole batch"), scheduleDay: day, scheduleKey: key, animalId: animal?.id ?? null, by: me(ctx),
+  });
   return { ...h, cost: m$(ctx, h.cost), recorded_by: recorder(ctx, h.recorded_by) };
 }, { status: 201 });
 
@@ -915,9 +965,10 @@ route("POST", "/batches", (ctx) => {
   requireFields(ctx.body, "farm_id", "type", "name", "count", "date");
   positive(ctx.body, "count");
   moduleEnabled(ctx, ctx.body.farm_id, ctx.body.type);
-  if (typeInfo(ctx.body.type).module !== "batches") throw new MockError(400, "validation_error", "Choose layers, broilers or fish.");
+  const info = typeInfo(ctx.body.type);
+  if (info.module !== "batches" && info.tracking_mode !== "mixed") throw new MockError(400, "validation_error", "Choose a type that is kept in batches.");
   const e = cmd.startEnterprise(data(ctx), {
-    farm: ctx.body.farm_id, type: ctx.body.type, name: ctx.body.name, date: ctx.body.date, count: Number(ctx.body.count),
+    module: "batches", farm: ctx.body.farm_id, type: ctx.body.type, name: ctx.body.name, date: ctx.body.date, count: Number(ctx.body.count),
     cost: can(ctx, "money.read") ? Number(ctx.body.cost || 0) : 0, source: ctx.body.source ?? "", structure: ctx.body.structure_id || null, by: me(ctx),
   });
   e.age_days = Number(ctx.body.age_days ?? 0);
@@ -952,7 +1003,7 @@ route("POST", "/seasons", (ctx) => {
   if (used + Number(ctx.body.area_acres) > Number(plot.area_acres) + 0.001) {
     throw new MockError(400, "validation_error", "The plot is not big enough.", { area_acres: [`Only ${(Number(plot.area_acres) - used).toFixed(2)} acres of ${plot.name} are free.`] });
   }
-  const e = cmd.startEnterprise(d, { farm: ctx.body.farm_id, type: ctx.body.type, name: ctx.body.name, date: ctx.body.date, plot: plot.id, variety: ctx.body.variety ?? "", area: Number(ctx.body.area_acres), by: me(ctx) });
+  const e = cmd.startEnterprise(d, { farm: ctx.body.farm_id, type: ctx.body.type, name: ctx.body.name, date: ctx.body.date, plot: plot.id, variety: ctx.body.variety ?? "", area: Number(ctx.body.area_acres), plantCount: ctx.body.plant_count ? Number(ctx.body.plant_count) : null, by: me(ctx) });
   return publicEnterprise(e);
 }, { status: 201 });
 
@@ -1505,6 +1556,16 @@ function alertsFor(ctx: Ctx, farmId: string): T.Alert[] {
     }
     if (recs.some((r) => r.conflict)) push({ id: `sync_conflict:${e.id}`, type: "sync_conflict", severity: "info", subject_type: "enterprise", subject_id: e.id, params: { enterprise: e.name }, money: false });
   }
+  for (const e of d.enterprises.filter((x) => x.farm_id === farmId && x.status === "active" && x.module === "livestock" && picks.includes(x.type))) {
+    for (const step of breedingCalendar(ctx, e, d.animals.filter((a) => a.enterprise_id === e.id))) {
+      if (step.code === "heat_check" || step.status === "upcoming" || step.date < addDays(today, -14)) continue;
+      push({ id: `breeding_due:${step.code}:${step.animal_id}:${step.date}`, type: "breeding_due", severity: step.status === "overdue" && step.code === "birth" ? "critical" : "warning", subject_type: "animal", subject_id: step.animal_id, params: { enterprise_id: e.id, enterprise_name: e.name, code: step.code, animal_tag: step.animal_tag, date: step.date }, money: false });
+    }
+  }
+  if (picks.some((c) => typeInfo(c).module === "crops")) {
+    const c = cropHealthFor(farm);
+    if (c.latest?.trend?.direction === "falling") push({ id: `crop_stress:${farmId}:${c.latest.id}`, type: "crop_stress", severity: "warning", subject_type: "farm", subject_id: farmId, params: { date: c.latest.date, ndvi: c.latest.ndvi!.mean, previous: c.scenes[1]!.ndvi!.mean, since: c.latest.trend.since, health: c.latest.health }, money: false });
+  }
   for (const f of weatherFor(farm).forecast.filter((x) => x.rain_mm >= 30)) {
     push({ id: `heavy_rain:${farmId}:${f.date}`, type: "heavy_rain", severity: "warning", subject_type: "farm", subject_id: farmId, params: { date: f.date, rain_mm: f.rain_mm }, money: false });
   }
@@ -1976,20 +2037,47 @@ route("POST", "/animals/:id/births", (ctx) => {
   const open = d.breeding.filter((b) => b.animal_id === mother.id && !b.outcome);
   const event = ctx.body.breeding_event_id ? open.find((b) => b.id === ctx.body.breeding_event_id) : open.filter((b) => b.service_date <= ctx.body.date).sort((x, y) => y.service_date.localeCompare(x.service_date))[0];
   if (ctx.body.breeding_event_id && !event) throw new MockError(400, "validation_error", "Check the highlighted fields.", { breeding_event_id: ["Choose a service that hasn't ended yet."] });
+  const e = enterprise(ctx, mother.enterprise_id);
+  const litters = typeInfo(e.type).tracking_mode === "mixed";
+  if (litters && (ctx.body.born_alive == null || ctx.body.born_alive === "")) throw new MockError(400, "validation_error", "Check the highlighted fields.", { born_alive: ["Enter how many were born alive."] });
+  let into: MEnterprise | undefined;
+  if (litters && ctx.body.into_batch_id) {
+    into = d.enterprises.find((x) => x.id === ctx.body.into_batch_id && x.farm_id === e.farm_id && x.type === e.type && x.module === "batches" && x.status === "active");
+    if (!into) throw new MockError(400, "validation_error", "Check the highlighted fields.", { into_batch_id: ["Choose an open batch of the same animals on this farm."] });
+  }
   const young = (ctx.body.offspring ?? []) as { tag: string; sex: T.Sex; name: string }[];
   const tags = young.map((y) => y.tag.trim().toLowerCase());
   if (new Set(tags).size !== tags.length || d.animals.some((x) => x.enterprise_id === mother.enterprise_id && tags.includes(x.tag.toLowerCase()))) {
     throw new MockError(400, "validation_error", "Check the highlighted fields.", { offspring: ["Another animal in this herd has this tag."] });
   }
-  if (event) Object.assign(event, { outcome: "born", birth_date: ctx.body.date });
+  const service: MBreeding = event ?? {
+    id: crypto.randomUUID(), animal_id: mother.id, service_date: addDays(ctx.body.date, -(GESTATION_DAYS[e.type] ?? 283)), method: "natural", sire: "", note: "",
+    expected_due: ctx.body.date, outcome: null, birth_date: null, recorded_by: me(ctx),
+  };
+  if (!event) d.breeding.push(service);
+  Object.assign(service, { outcome: "born", birth_date: ctx.body.date });
+  let litter: MEnterprise | null = null;
+  const alive = Number(ctx.body.born_alive ?? 0);
+  if (litters) {
+    if (alive > 0 && into) {
+      into.start_count = (into.start_count ?? 0) + alive;
+      into.head_count = (into.head_count ?? 0) + alive;
+      litter = into;
+    } else if (alive > 0) {
+      const lang = ctx.req.headers["Accept-Language"];
+      const name = lang === "sw" ? `Watoto wa ${mother.tag}` : lang === "fr" ? `Portée de ${mother.tag}` : `Litter of ${mother.tag}`;
+      litter = cmd.startEnterprise(d, { module: "batches", farm: e.farm_id, type: e.type, name, date: ctx.body.date, count: alive, source: mother.tag, structure: e.structure_id, by: me(ctx) });
+      litter.age_days = 0;
+    }
+    Object.assign(service, { born_alive: alive, born_dead: Number(ctx.body.born_dead ?? 0), litter_id: litter?.id ?? null });
+  }
   const born = young.map((y) => ({
     id: crypto.randomUUID(), enterprise_id: mother.enterprise_id, tag: y.tag.trim(), name: (y.name ?? "").trim(), sex: y.sex, breed: mother.breed, birth_date: ctx.body.date,
     source: "born" as const, cost: null, status: "active" as const, mother_id: mother.id, milk_7d: null,
   }));
   d.animals.push(...born);
-  const e = enterprise(ctx, mother.enterprise_id);
   e.head_count = (e.head_count ?? 0) + born.length;
-  return { breeding_event: event ? breedingOut(ctx, event) : null, offspring: born.map((a) => animalOut(ctx, a)) };
+  return { breeding_event: breedingOut(ctx, service), litter: litter ? publicEnterprise(litter) : null, offspring: born.map((a) => animalOut(ctx, a)) };
 }, { status: 201 });
 route("GET", "/animals/:id/weights", (ctx) => {
   const a = animalOf(ctx, ctx.params.id);
@@ -2031,8 +2119,10 @@ route("POST", "/batches/:id/weights", (ctx) => {
   return { ...w, avg_kg: qty(w.avg_kg), recorded_by: recorder(ctx, w.recorded_by) };
 }, { status: 201 });
 
-const BATCH_TYPES: T.TypeCode[] = ["layers", "broilers", "fish"];
+const SCHEDULE_TYPES: T.TypeCode[] = CATALOGUE.enterprise_types.filter((x) => x.module !== "crops").map((x) => x.code);
 const stepsFor = (ctx: Ctx, type: T.TypeCode) => ({ steps: data(ctx).schedules[type] ?? VACCINATION_DEFAULTS[type] ?? [], custom: !!data(ctx).schedules[type] });
+const DUE_AHEAD = 3;
+const stateOf = (due: string, today: string, done?: string | null) => (done ? "done" : due < today ? "overdue" : due <= addDays(today, DUE_AHEAD) ? "due" : "upcoming") as T.VaccinationState;
 
 route("GET", "/batches/:id/vaccinations", (ctx) => {
   const e = batchOf(ctx, ctx.params.id);
@@ -2041,26 +2131,204 @@ route("GET", "/batches/:id/vaccinations", (ctx) => {
   const { steps, custom } = stepsFor(ctx, e.type);
   if (start === null) return { enterprise_id: e.id, age_days: null, custom, steps: [] };
   const done = new Map(data(ctx).health.filter((h) => h.enterprise_id === e.id && h.schedule_day != null).sort((a, b) => b.date.localeCompare(a.date)).map((h) => [h.schedule_day!, h.date]));
-  const plan = [...steps].sort((a, b) => a.day - b.day).filter((s) => s.day >= start).map((s): T.VaccinationPlanStep => {
-    const due = addDays(e.started_on, s.day - start);
-    const status = done.has(s.day) ? "done" : e.status === "closed" ? "missed" : due < today ? "overdue" : due <= addDays(today, 3) ? "due" : "upcoming";
-    return { ...s, due_on: due, status, done_on: done.get(s.day) ?? null };
+  const plan = steps.filter((s) => (s.kind ?? "age") === "age").sort((a, b) => a.day! - b.day!).filter((s) => s.day! >= start).map((s): T.VaccinationPlanStep => {
+    const due = addDays(e.started_on, s.day! - start);
+    const status = done.has(s.day!) ? "done" : e.status === "closed" ? "missed" : stateOf(due, today);
+    return { ...s, due_on: due, status, done_on: done.get(s.day!) ?? null };
   });
   return { enterprise_id: e.id, age_days: daysBetween(e.started_on, today) + start, custom, steps: plan } satisfies T.BatchVaccinations;
 });
-route("GET", "/vaccination-schedules", (ctx) => ({ next: null, previous: null, results: BATCH_TYPES.map((type) => ({ type, ...stepsFor(ctx, type) })) }));
+route("GET", "/vaccination-schedules", (ctx) => ({ next: null, previous: null, results: SCHEDULE_TYPES.map((type) => ({ type, ...stepsFor(ctx, type) })) }));
 route("PUT", "/vaccination-schedules", (ctx) => {
   need(ctx, "schedules.write");
   const type = ctx.body.type as T.TypeCode;
-  if (!BATCH_TYPES.includes(type)) throw new MockError(400, "validation_error", "Check the highlighted fields.", { type: ["Choose layers, broilers or fish."] });
+  if (!SCHEDULE_TYPES.includes(type)) throw new MockError(400, "validation_error", "Check the highlighted fields.", { type: ["Choose an animal type."] });
   const steps = ctx.body.steps as T.VaccinationStep[] | null;
+  const bad = (msg: string) => new MockError(400, "validation_error", "Check the highlighted fields.", { steps: [msg] });
   if (steps === null) delete data(ctx).schedules[type];
   else {
-    if (steps.some((s) => !String(s.vaccine ?? "").trim())) throw new MockError(400, "validation_error", "Check the highlighted fields.", { steps: ["Enter the vaccine for each step."] });
-    if (new Set(steps.map((s) => s.day)).size !== steps.length) throw new MockError(400, "validation_error", "Check the highlighted fields.", { steps: ["Use each day only once."] });
-    data(ctx).schedules[type] = steps.map((s) => ({ day: Number(s.day), vaccine: s.vaccine.trim(), note: (s.note ?? "").trim() })).sort((a, b) => a.day - b.day);
+    if (steps.some((s) => !String(s.vaccine ?? "").trim())) throw bad("Enter the vaccine for each step.");
+    if (typeInfo(type).module === "batches" && steps.some((s) => (s.kind ?? "age") !== "age")) throw bad("Batches follow steps by age only.");
+    if (steps.some((s) => !Number.isFinite(Number(s.kind === "every" ? s.every_days : s.kind === "before_birth" ? s.days : s.day)))) throw bad("This field is required.");
+    if (new Set(steps.map(stepKey)).size !== steps.length) throw bad("Use each day only once, and each repeated vaccine once.");
+    const order = { age: 0, every: 1, before_birth: 2 };
+    data(ctx).schedules[type] = steps
+      .map((s): T.VaccinationStep => {
+        const base = { vaccine: s.vaccine.trim(), note: (s.note ?? "").trim() };
+        if (s.kind === "every") return { kind: "every", every_days: Number(s.every_days), ...base };
+        if (s.kind === "before_birth") return { kind: "before_birth", days: Number(s.days), ...base };
+        return { day: Number(s.day), ...base, ...(s.sex ? { sex: s.sex } : {}) };
+      })
+      .sort((x, y) => order[x.kind ?? "age"] - order[y.kind ?? "age"] || (x.day ?? x.every_days ?? x.days ?? 0) - (y.day ?? y.every_days ?? y.days ?? 0));
   }
   return { type, ...stepsFor(ctx, type) };
+});
+
+/* ---------- Herd schedules (LIV-04, LIV-05), as apps/livestock/health.py ---------- */
+
+function herdOf(ctx: Ctx, id: string): MEnterprise {
+  const e = enterprise(ctx, id);
+  if (e.module !== "livestock") throw new MockError(400, "enterprise.wrong_module", "That record doesn't fit this enterprise.");
+  return e;
+}
+
+const openService = (d: OrgData, animalId: string) =>
+  d.breeding.filter((b) => b.animal_id === animalId && !b.outcome && b.pregnant !== false).sort((x, y) => y.service_date.localeCompare(x.service_date))[0];
+
+function vaccinationPlan(ctx: Ctx, e: MEnterprise, only?: MAnimal): T.VaccinationPlanStep[] {
+  const d = data(ctx);
+  const today = isoDate(new Date());
+  const animals = only ? [only] : d.animals.filter((a) => a.enterprise_id === e.id && a.status === "active");
+  const doses = new Map<string, string>();
+  for (const h of d.health.filter((x) => x.enterprise_id === e.id && x.schedule_key).sort((a, b) => a.date.localeCompare(b.date))) doses.set(`${h.schedule_key}|${h.animal_id ?? ""}`, h.date);
+  const out: T.VaccinationPlanStep[] = [];
+  const add = (s: T.VaccinationStep, key: string, due: string | null, status: T.VaccinationState, a?: MAnimal, done?: string | null) =>
+    out.push({ ...s, kind: s.kind ?? "age", key, due_on: due, status, done_on: done ?? null, animal_id: a?.id ?? null, animal_tag: a?.tag ?? null });
+  for (const s of stepsFor(ctx, e.type).steps) {
+    const key = stepKey(s);
+    if ((s.kind ?? "age") === "age") {
+      for (const a of animals) {
+        if (!a.birth_date || (s.sex && s.sex !== a.sex)) continue;
+        const due = addDays(a.birth_date, s.day!);
+        const done = doses.get(`${key}|${a.id}`);
+        // Given (or not) before the farm knew the animal: a bought one joined no earlier than its herd started.
+        if (!done && a.source === "bought" && due < e.started_on) continue;
+        add(s, key, due, stateOf(due, today, done), a, done);
+      }
+    } else if (s.kind === "every") {
+      if (only) continue;
+      const last = doses.get(`${key}|`);
+      if (!last) add(s, key, null, "not_recorded");
+      else {
+        const due = addDays(last, s.every_days!);
+        out.push({ ...s, key, due_on: due, status: stateOf(due, today), done_on: null, last_done_on: last, animal_id: null, animal_tag: null });
+      }
+    } else {
+      for (const a of animals) {
+        const b = openService(d, a.id);
+        if (!b) continue;
+        const due = addDays(b.expected_due, -s.days!);
+        const done = doses.get(`${key}|${a.id}`);
+        add(s, key, due, stateOf(due, today, done && done >= b.service_date ? done : null), a, done && done >= b.service_date ? done : null);
+      }
+    }
+  }
+  return out.sort((x, y) => (x.due_on ?? "9999").localeCompare(y.due_on ?? "9999"));
+}
+
+function breedingCalendar(ctx: Ctx, e: MEnterprise, females: MAnimal[]): T.BreedingCalendarEvent[] {
+  const p = BREEDING[e.type];
+  if (!p) return [];
+  const d = data(ctx);
+  const today = isoDate(new Date());
+  const out: T.BreedingCalendarEvent[] = [];
+  for (const a of females.filter((x) => x.sex === "female" && x.status === "active")) {
+    const events = d.breeding.filter((b) => b.animal_id === a.id).sort((x, y) => y.service_date.localeCompare(x.service_date));
+    const add = (code: T.BreedingCode, date: string, b?: MBreeding, passed = 10_000) => {
+      if (date < addDays(today, -passed)) return;
+      out.push({ code, date, status: stateOf(date, today) as T.BreedingCalendarEvent["status"], animal_id: a.id, animal_tag: a.tag, breeding_event_id: b?.id ?? null });
+    };
+    const current = events.find((b) => !b.outcome);
+    const last = events[0];
+    if (current) {
+      if (current.pregnant == null) {
+        if (p.cycle) add("heat_check", addDays(current.service_date, p.cycle), current, 3);
+        add("pregnancy_check", addDays(current.service_date, p.pregnancy_check), current);
+      }
+      if (p.dry_off) add("dry_off", addDays(current.expected_due, -p.dry_off), current);
+      add("prepare_birth", addDays(current.expected_due, -p.prepare), current);
+      add("birth", current.expected_due, current);
+    } else if (last?.outcome === "born" && last.birth_date) {
+      add("wean", addDays(last.birth_date, p.wean), last, 30);
+      add("serve", addDays(last.birth_date, p.serve_after_birth), last);
+    } else if (last) {
+      add("serve", last.checked_on ?? addDays(last.service_date, p.cycle ?? p.pregnancy_check), last);
+    } else if (a.birth_date) {
+      add("serve", addDays(a.birth_date, p.first_service));
+    }
+  }
+  return out.sort((x, y) => x.date.localeCompare(y.date) || x.animal_tag.localeCompare(y.animal_tag));
+}
+
+const soon = <R,>(rows: R[], date: (r: R) => string | null, status: (r: R) => string) => {
+  const horizon = addDays(isoDate(new Date()), 60);
+  return rows.filter((r) => status(r) !== "done" && (date(r) == null || date(r)! <= horizon));
+};
+
+route("GET", "/herds/:id/vaccinations", (ctx) => {
+  const e = herdOf(ctx, ctx.params.id);
+  return { enterprise_id: e.id, custom: stepsFor(ctx, e.type).custom, steps: soon(vaccinationPlan(ctx, e), (s) => s.due_on, (s) => s.status) } satisfies T.HerdVaccinations;
+});
+route("GET", "/herds/:id/breeding-calendar", (ctx) => {
+  const e = herdOf(ctx, ctx.params.id);
+  const females = data(ctx).animals.filter((a) => a.enterprise_id === e.id);
+  return { enterprise_id: e.id, events: soon(breedingCalendar(ctx, e, females), (x) => x.date, () => "") };
+});
+route("GET", "/animals/:id/schedule", (ctx) => {
+  const a = animalOf(ctx, ctx.params.id);
+  const e = enterprise(ctx, a.enterprise_id);
+  const active = a.status === "active";
+  return { animal_id: a.id, vaccinations: active ? vaccinationPlan(ctx, e, a) : [], breeding: active ? breedingCalendar(ctx, e, [a]) : [] } satisfies T.AnimalSchedule;
+});
+route("POST", "/breeding/:id/check", (ctx) => {
+  need(ctx, "records.write");
+  const b = data(ctx).breeding.find((x) => x.id === ctx.params.id);
+  if (!b) throw new MockError(404, "not_found", "Not found.");
+  requireFields(ctx.body, "date");
+  inHerd(ctx, animalOf(ctx, b.animal_id));
+  if (b.outcome) throw new MockError(400, "breeding.ended", "This service has already ended.");
+  if (ctx.body.date < b.service_date) throw new MockError(400, "validation_error", "Check the highlighted fields.", { date: ["Choose a day on or after the service."] });
+  Object.assign(b, { pregnant: !!ctx.body.pregnant, checked_on: ctx.body.date, outcome: ctx.body.pregnant ? null : "failed" });
+  return breedingOut(ctx, b);
+});
+
+/* ---------- Crop health (CRP-05): made-up scenes, steady with a dip, so the page has something to show ---------- */
+
+function cropHealthFor(farm: T.Farm): T.CropHealth {
+  const base = { farm_id: farm.id, scaled: false, checked_at: null, bounds: null, latest: null, scenes: [] };
+  const ring = farm.boundary?.coordinates[0];
+  if (!ring?.length) return { ...base, status: "no_boundary" };
+  const lngs = ring.map((p) => p[0]);
+  const lats = ring.map((p) => p[1]);
+  const seedN = hash(farm.id);
+  const today = new Date();
+  const scenes: T.SatelliteScene[] = [];
+  for (let i = 0; i < 12; i++) {
+    const date = isoDate(new Date(today.getTime() - (2 + i * 6) * 86_400_000));
+    const wave = Math.sin((seedN % 7) + i / 2) * 0.05;
+    const mean = Math.round((0.62 + wave - (i === 0 ? 0.13 : 0)) * 1000) / 1000;
+    const id = `00000000-0000-4000-8000-${String(seedN % 1e6).padStart(6, "0")}${String(i).padStart(6, "0")}`;
+    scenes.push({
+      id, date, taken_at: `${date}T08:15:00Z`, satellite: i % 2 ? "Landsat 8" : "Sentinel-2", cloud_pct: (seedN + i * 7) % 30, coverage_pct: 100,
+      ndvi: { mean, median: mean, min: Math.max(0, mean - 0.3), max: Math.min(1, mean + 0.15) }, health: mean < 0.2 ? "bare" : mean < 0.4 ? "poor" : mean < 0.6 ? "fair" : "good",
+      images: { ndvi: `/api/v1/crop-health/scenes/${id}/image?layer=ndvi`, truecolor: `/api/v1/crop-health/scenes/${id}/image?layer=truecolor` },
+    });
+  }
+  const change = Math.round((scenes[0]!.ndvi!.mean - scenes[1]!.ndvi!.mean) * 1000) / 1000;
+  return {
+    ...base, status: "ready", scaled: Number(farm.area_ha ?? 2) < 1, checked_at: new Date().toISOString(),
+    bounds: [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
+    latest: { ...scenes[0]!, trend: { change, since: scenes[1]!.date, direction: change <= -0.1 ? "falling" : change >= 0.1 ? "rising" : "steady" } },
+    scenes,
+  };
+}
+
+route("GET", "/crop-health", (ctx) => cropHealthFor(farmOf(ctx, ctx.q.get("farm_id"))));
+
+/** A stand-in scene image: a patchy field in NDVI colours, or browns and greens for the photo. */
+route("GET", "/crop-health/scenes/:id/image", (ctx) => {
+  const n = hash(ctx.params.id);
+  const photo = ctx.q.get("layer") === "truecolor";
+  const cells: string[] = [];
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const v = (Math.sin((x + n) / 3) + Math.cos((y + n / 7) / 2.5) + 2) / 4;
+      const fill = photo ? `hsl(${70 + v * 40} 35% ${28 + v * 18}%)` : `hsl(${v * 120} 70% ${38 + v * 8}%)`;
+      cells.push(`<rect x="${x}" y="${y}" width="1.05" height="1.05" fill="${fill}"/>`);
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" preserveAspectRatio="none">${cells.join("")}</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 });
 
 function plotOut(ctx: Ctx, p: T.Plot): T.Plot {

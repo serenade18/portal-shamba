@@ -3,11 +3,11 @@ import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import * as api from "@/api/endpoints";
 import { fieldErrors, useCatalogue, useErrorText, useKey, usePaged } from "@/api/hooks";
-import type { EnterpriseDetail, SampleWeight, TypeCode, VaccinationPlanStep, VaccinationState, VaccinationStep } from "@/api/types";
+import type { EnterpriseDetail, SampleWeight, Sex, TypeCode, VaccinationKind, VaccinationPlanStep, VaccinationState, VaccinationStep } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { LoadMore, RecordedBy, Table } from "@/components/ui/data";
 import { Chip, EmptyState, SkeletonRows, type Tone } from "@/components/ui/feedback";
-import { ChoiceCards, DateField, FormError, QuantityField, TextField } from "@/components/ui/forms";
+import { ChoiceCards, DateField, FormError, QuantityField, SelectField, TextField } from "@/components/ui/forms";
 import { SidePanel } from "@/components/ui/overlay";
 import { useQty, useT } from "@/i18n";
 import { formatDate, formatNumber, today } from "@/lib/format";
@@ -15,7 +15,7 @@ import { useCan } from "@/stores/session";
 import { toast } from "@/stores/toast";
 import { Footer, useInvalidateOrg, useSave } from "./forms";
 
-const STATE_TONE: Record<VaccinationState, Tone> = { done: "health", due: "amber", overdue: "terracotta", upcoming: "neutral", missed: "neutral" };
+export const STATE_TONE: Record<VaccinationState, Tone> = { done: "health", due: "amber", overdue: "terracotta", upcoming: "neutral", missed: "neutral", not_recorded: "lavender" };
 
 /** The batch's vaccination plan by age: done, due, overdue or upcoming (BAT-04). */
 export function VaccinationsTab({ ent, onRecord, onEditSchedule }: { ent: EnterpriseDetail; onRecord: (step: VaccinationPlanStep) => void; onEditSchedule: () => void }) {
@@ -48,7 +48,7 @@ export function VaccinationsTab({ ent, onRecord, onEditSchedule }: { ent: Enterp
         columns={[
           { key: "day", header: t("vacc.day"), numeric: true, render: (s) => t("vacc.dayN", { n: s.day }) },
           { key: "v", header: t("vacc.vaccine"), render: (s) => <span><span className="strong">{s.vaccine}</span>{s.note && <span className="small muted" style={{ display: "block" }}>{s.note}</span>}</span> },
-          { key: "due", header: t("vacc.dueOn"), render: (s) => formatDate(s.due_on, t.locale) },
+          { key: "due", header: t("vacc.dueOn"), render: (s) => (s.due_on ? formatDate(s.due_on, t.locale) : "–") },
           { key: "s", header: t("common.status"), render: (s) => <Chip tone={STATE_TONE[s.status]}>{s.status === "done" && s.done_on ? t("vacc.doneOn", { date: formatDate(s.done_on, t.locale) }) : t(`vacc.state.${s.status}`)}</Chip> },
           ...(open
             ? [{ key: "a", header: <span className="visually-hidden">{t("vacc.record")}</span>, label: "", render: (s: VaccinationPlanStep) => (s.status !== "done" && s.status !== "missed" ? <Button variant={s.status === "upcoming" ? "quiet" : "secondary"} size="sm" onClick={() => onRecord(s)}>{t("vacc.record")}</Button> : null) }]
@@ -59,7 +59,7 @@ export function VaccinationsTab({ ent, onRecord, onEditSchedule }: { ent: Enterp
   );
 }
 
-/** Sample weighings: how many were weighed and their average (BAT-05). Broilers and fish only. */
+/** Sample weighings: how many were weighed and their average (BAT-05). Not for layers. */
 export function BatchWeightsTab({ ent }: { ent: EnterpriseDetail }) {
   const t = useT();
   const key = useKey();
@@ -105,7 +105,7 @@ export function SampleWeightPanel({ ent, onClose }: { ent: EnterpriseDetail; onC
     <SidePanel title={t("sample.title")} onClose={onClose} onSubmit={() => save.mutate(undefined)} footer={<Footer onClose={onClose} loading={save.isPending} label={t("common.save")} />}>
       <div className="stack">
         <DateField label={t("common.date")} value={date} onChange={setDate} max={today()} />
-        <TextField label={ent.type === "fish" ? t("sample.sizeFish") : t("sample.sizeBirds")} value={size} onChange={(v) => setSize(v.replace(/\D/g, ""))} inputMode="numeric" error={err.sample_size} />
+        <TextField label={ent.type === "fish" ? t("sample.sizeFish") : ent.type === "broilers" ? t("sample.sizeBirds") : t("sample.sizeAnimals")} value={size} onChange={(v) => setSize(v.replace(/\D/g, ""))} inputMode="numeric" error={err.sample_size} />
         <QuantityField label={`⚖ ${t("sample.avg")}`} value={avg} onChange={setAvg} unit="kg" units={["kg"]} error={err.avg_kg} hint={t("sample.avgHint")} />
         <FormError message={save.error && !Object.keys(err).length ? errorText(save.error) : null} />
       </div>
@@ -113,7 +113,24 @@ export function SampleWeightPanel({ ent, onClose }: { ent: EnterpriseDetail; onC
   );
 }
 
-/** The farm account's own vaccination schedule per batch type, or the default (BAT-04). */
+type StepRow = { kind: VaccinationKind; n: string; sex: "" | Sex; vaccine: string; note: string };
+
+const toRow = (s: VaccinationStep): StepRow => ({
+  kind: s.kind ?? "age", n: String(s.kind === "every" ? s.every_days : s.kind === "before_birth" ? s.days : s.day), sex: s.sex ?? "", vaccine: s.vaccine, note: s.note,
+});
+
+function fromRow(r: StepRow): VaccinationStep {
+  const n = Number(r.n);
+  if (r.kind === "every") return { kind: "every", every_days: n, vaccine: r.vaccine, note: r.note };
+  if (r.kind === "before_birth") return { kind: "before_birth", days: n, vaccine: r.vaccine, note: r.note };
+  return { day: n, vaccine: r.vaccine, note: r.note, ...(r.sex ? { sex: r.sex } : {}) };
+}
+
+/**
+ * The farm account's own vaccination schedule per animal type, or the default (BAT-04, LIV-04).
+ * Batches follow steps by age; herds also have steps repeated for the whole herd and steps
+ * before a birth.
+ */
 export function SchedulePanel({ types, initialType, onClose }: { types: TypeCode[]; initialType?: TypeCode; onClose: () => void }) {
   const t = useT();
   const key = useKey();
@@ -123,16 +140,18 @@ export function SchedulePanel({ types, initialType, onClose }: { types: TypeCode
   const q = useQuery({ queryKey: key("vaccination-schedules"), queryFn: api.batches.schedules, select: (p) => p.results });
   const [type, setType] = useState<TypeCode>(initialType ?? types[0]!);
   const current = q.data?.find((s) => s.type === type);
-  const [steps, setSteps] = useState<(Omit<VaccinationStep, "day"> & { day: string })[]>([]);
+  const herd = catalogue.data?.enterprise_types.find((x) => x.code === type)?.module === "livestock";
+  const [steps, setSteps] = useState<StepRow[]>([]);
   useEffect(() => {
-    if (current) setSteps(current.steps.map((s) => ({ ...s, day: String(s.day) })));
+    if (current) setSteps(current.steps.map(toRow));
   }, [current]);
   const save = useMutation({
-    mutationFn: (reset: boolean) => api.batches.setSchedule(type, reset ? null : steps.map((s) => ({ day: Number(s.day), vaccine: s.vaccine, note: s.note }))),
+    mutationFn: (reset: boolean) => api.batches.setSchedule(type, reset ? null : steps.map(fromRow)),
     onSuccess: (_, reset) => (invalidate(), toast(t(reset ? "vacc.scheduleReset" : "vacc.scheduleSaved")), onClose()),
   });
   const err = fieldErrors(save.error);
   const label = (c: TypeCode) => catalogue.data?.enterprise_types.find((x) => x.code === c)?.labels[t.locale] ?? c;
+  const numberLabel = (k: VaccinationKind) => (k === "every" ? t("vacc.everyDays") : k === "before_birth" ? t("vacc.daysBefore") : t("vacc.day"));
   return (
     <SidePanel
       wide
@@ -151,15 +170,22 @@ export function SchedulePanel({ types, initialType, onClose }: { types: TypeCode
       ) : (
         <div className="stack">
           {types.length > 1 && <ChoiceCards label={t("batch.type")} value={type} onChange={setType} options={types.map((c) => ({ value: c, label: label(c) }))} />}
-          <p className="small muted">{t("vacc.scheduleHelp")}</p>
+          <p className="small muted">{herd ? t("vacc.scheduleHelpHerd") : t("vacc.scheduleHelp")}</p>
           <div className="lines">
             {steps.map((s, i) => {
-              const upd = (patch: Partial<typeof s>) => setSteps(steps.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+              const upd = (patch: Partial<StepRow>) => setSteps(steps.map((x, j) => (j === i ? { ...x, ...patch } : x)));
               return (
-                <div key={i} className="line-card line-row" style={{ gridTemplateColumns: "72px minmax(0, 1.4fr) minmax(0, 1fr) auto" }}>
-                  <TextField label={t("vacc.day")} value={s.day} onChange={(v) => upd({ day: v.replace(/\D/g, "") })} inputMode="numeric" />
+                <div key={i} className="line-card line-row" style={{ gridTemplateColumns: herd ? "minmax(0, 1fr) 88px minmax(0, 1.4fr) minmax(0, 1fr) auto" : "72px minmax(0, 1.4fr) minmax(0, 1fr) auto" }}>
+                  {herd && (
+                    <SelectField label={t("vacc.when")} value={s.kind} onChange={(v) => upd({ kind: v as VaccinationKind, sex: v === "age" ? s.sex : "" })} options={(["age", "every", "before_birth"] as const).map((k) => ({ value: k, label: t(`vacc.kind.${k}`) }))} />
+                  )}
+                  <TextField label={numberLabel(s.kind)} value={s.n} onChange={(v) => upd({ n: v.replace(/\D/g, "") })} inputMode="numeric" />
                   <TextField label={t("vacc.vaccine")} value={s.vaccine} onChange={(v) => upd({ vaccine: v })} />
-                  <TextField label={t("common.note")} value={s.note} onChange={(v) => upd({ note: v })} placeholder={t("vacc.notePlaceholder")} optional />
+                  {herd && s.kind === "age" ? (
+                    <SelectField label={t("vacc.forSex")} value={s.sex} onChange={(v) => upd({ sex: v as StepRow["sex"] })} placeholder={t("vacc.allAnimals")} options={[{ value: "female", label: t("sex.female") }, { value: "male", label: t("sex.male") }]} optional />
+                  ) : (
+                    <TextField label={t("common.note")} value={s.note} onChange={(v) => upd({ note: v })} placeholder={t("vacc.notePlaceholder")} optional />
+                  )}
                   <Button variant="quiet" aria-label={t("common.remove")} icon={<Trash2 size={18} />} onClick={() => setSteps(steps.filter((_, j) => j !== i))} />
                 </div>
               );
@@ -167,7 +193,7 @@ export function SchedulePanel({ types, initialType, onClose }: { types: TypeCode
           </div>
           {!steps.length && <p className="small muted">{t("vacc.noSteps")}</p>}
           <div>
-            <Button variant="quiet" icon={<Plus size={16} />} onClick={() => setSteps([...steps, { day: "", vaccine: "", note: "" }])}>{t("vacc.addStep")}</Button>
+            <Button variant="quiet" icon={<Plus size={16} />} onClick={() => setSteps([...steps, { kind: "age", n: "", sex: "", vaccine: "", note: "" }])}>{t("vacc.addStep")}</Button>
           </div>
           <FormError message={typeof err.steps === "string" && err.steps ? err.steps : save.error ? errorText(save.error) : null} />
         </div>

@@ -2,19 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import * as api from "@/api/endpoints";
-import { fieldErrors, useErrorText, useKey, usePaged } from "@/api/hooks";
-import type { Animal, AnimalWeight, BreedingEvent, BreedingMethod, EnterpriseDetail, Sex } from "@/api/types";
+import { fieldErrors, useCatalogue, useEnterprises, useErrorText, useKey, usePaged } from "@/api/hooks";
+import type { Animal, AnimalWeight, BreedingEvent, BreedingMethod, EnterpriseDetail, Sex, VaccinationPlanStep } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { LoadMore, Money, RecordedBy, Table } from "@/components/ui/data";
 import { Chip, Notice, SkeletonRows } from "@/components/ui/feedback";
 import { ChoiceCards, DateField, FormError, QuantityField, SelectField, TextField } from "@/components/ui/forms";
 import { SidePanel } from "@/components/ui/overlay";
 import { useQty, useT } from "@/i18n";
+import { isMixed } from "@/lib/enterpriseTypes";
 import { daysSince, formatDate, formatNumber, today } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { Footer, useSave } from "./forms";
+import { breedingStatus, PregnancyCheckPanel, stepStatus, stepWhen, uncheckedService } from "./HerdPanels";
 
-type Mode = "view" | "edit" | "service" | "birth" | "weight";
+type Mode = "view" | "edit" | "service" | "birth" | "weight" | "check";
 
 /** Correct an animal's tag, name, sex, breed, birth date or mother (LIV-01). */
 function EditAnimalPanel({ animal, herd, onClose }: { animal: Animal; herd: Animal[]; onClose: () => void }) {
@@ -66,16 +68,30 @@ function ServicePanel({ animal, onClose }: { animal: Animal; onClose: () => void
   );
 }
 
-/** She gave birth: each of the young joins the herd linked to its mother (LIV-05). */
-function BirthPanel({ animal, open, onClose }: { animal: Animal; open: BreedingEvent[]; onClose: () => void }) {
+/**
+ * She gave birth: each of the young joins the herd linked to its mother (LIV-05). Pigs and
+ * rabbits give birth to litters: they are counted, and the live ones raised as a batch.
+ */
+function BirthPanel({ animal, ent, open, onClose }: { animal: Animal; ent: EnterpriseDetail; open: BreedingEvent[]; onClose: () => void }) {
   const t = useT();
   const errorText = useErrorText();
+  const catalogue = useCatalogue();
+  const litter = isMixed(catalogue.data?.enterprise_types.find((x) => x.code === ent.type));
+  const batches = useEnterprises("batches");
+  const growing = (batches.data ?? []).filter((b) => b.type === ent.type && b.status === "active");
   const [date, setDate] = useState(today());
   const [eventId, setEventId] = useState(open[0]?.id ?? "");
-  const [young, setYoung] = useState<{ tag: string; sex: Sex; name: string }[]>([{ tag: "", sex: "female", name: "" }]);
+  const [young, setYoung] = useState<{ tag: string; sex: Sex; name: string }[]>(litter ? [] : [{ tag: "", sex: "female", name: "" }]);
+  const [alive, setAlive] = useState("");
+  const [dead, setDead] = useState("");
+  const [into, setInto] = useState("");
   const save = useSave(
-    () => api.livestock.recordBirth(animal.id, { date, offspring: young.filter((y) => y.tag.trim()), breeding_event_id: eventId || null }),
-    "birth.saved",
+    () =>
+      api.livestock.recordBirth(animal.id, {
+        date, offspring: young.filter((y) => y.tag.trim()), breeding_event_id: eventId || null,
+        ...(litter ? { born_alive: alive === "" ? null : Number(alive), born_dead: Number(dead || 0), into_batch_id: into || null } : {}),
+      }),
+    litter ? "birth.savedLitter" : "birth.saved",
     onClose,
   );
   const err = fieldErrors(save.error);
@@ -88,8 +104,16 @@ function BirthPanel({ animal, open, onClose }: { animal: Animal; open: BreedingE
             <SelectField label={t("birth.service")} value={eventId} onChange={setEventId} placeholder={t("birth.noService")} options={open.map((b) => ({ value: b.id, label: t("birth.serviceOption", { date: formatDate(b.service_date, t.locale), due: formatDate(b.expected_due, t.locale) }) }))} error={err.breeding_event_id} />
           )}
         </div>
+        {litter && (
+          <div className="form-grid">
+            <TextField label={t("birth.bornAlive")} value={alive} onChange={(v) => setAlive(v.replace(/\D/g, ""))} inputMode="numeric" error={err.born_alive} autoFocus />
+            <TextField label={t("birth.bornDead")} value={dead} onChange={(v) => setDead(v.replace(/\D/g, ""))} inputMode="numeric" placeholder="0" error={err.born_dead} optional />
+            <SelectField className="span-2" label={t("birth.raiseIn")} value={into} onChange={setInto} placeholder={t("birth.newLitter")} options={growing.map((b) => ({ value: b.id, label: b.name }))} hint={t("birth.raiseInHint")} error={err.into_batch_id} />
+          </div>
+        )}
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
-          <legend className="field-label">{t("birth.young")}</legend>
+          <legend className="field-label">{litter ? t("birth.keepers") : t("birth.young")}</legend>
+          {litter && <p className="small muted">{t("birth.keepersHelp")}</p>}
           <div className="lines">
             {young.map((y, i) => {
               const upd = (patch: Partial<typeof y>) => setYoung(young.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -108,7 +132,7 @@ function BirthPanel({ animal, open, onClose }: { animal: Animal; open: BreedingE
               <Button variant="quiet" icon={<Plus size={16} />} onClick={() => setYoung([...young, { tag: "", sex: "female", name: "" }])}>{t("birth.addYoung")}</Button>
             </div>
           )}
-          {!young.length && <p className="small muted">{t("birth.noneSurvived")}</p>}
+          {!young.length && !litter && <p className="small muted">{t("birth.noneSurvived")}</p>}
         </fieldset>
         <FormError message={err.offspring ?? (save.error && !Object.keys(err).length ? errorText(save.error) : null)} />
       </div>
@@ -135,16 +159,80 @@ function WeightPanel({ animal, onClose }: { animal: Animal; onClose: () => void 
 }
 
 function outcomeChip(t: ReturnType<typeof useT>, b: BreedingEvent) {
-  if (b.outcome === "born") return <Chip tone="health">{t("breeding.outcome.born", { date: formatDate(b.birth_date, t.locale) })}</Chip>;
+  if (b.outcome === "born") {
+    return (
+      <span>
+        <Chip tone="health">{t("breeding.outcome.born", { date: formatDate(b.birth_date, t.locale) })}</Chip>
+        {b.born_alive != null && <span className="small muted" style={{ display: "block" }}>{t("breeding.litter", { alive: b.born_alive, dead: b.born_dead ?? 0 })}</span>}
+      </span>
+    );
+  }
   if (b.outcome === "failed") return <Chip tone="neutral">{t("breeding.outcome.failed")}</Chip>;
+  if (b.pregnant) return <Chip tone={daysSince(b.expected_due) > 0 ? "amber" : "health"}>{t("breeding.outcome.pregnant")}</Chip>;
   return <Chip tone={daysSince(b.expected_due) > 0 ? "amber" : "lavender"}>{t("breeding.outcome.waiting")}</Chip>;
+}
+
+/** The animal's next breeding steps and the vaccinations it is due for. */
+function ScheduleSection({ animal, ent, onRecordStep }: { animal: Animal; ent: EnterpriseDetail; onRecordStep: (s: VaccinationPlanStep) => void }) {
+  const t = useT();
+  const key = useKey();
+  const canRecord = useCan("records.write");
+  const q = useQuery({ queryKey: key("animal-schedule", animal.id), queryFn: () => api.livestock.schedule(animal.id), enabled: animal.status === "active" });
+  if (animal.status !== "active") return null;
+  if (!q.data) return <SkeletonRows rows={2} />;
+  const open = q.data.vaccinations.filter((s) => s.status !== "done");
+  const done = q.data.vaccinations.filter((s) => s.status === "done");
+  return (
+    <>
+      {animal.sex === "female" && (
+        <section className="stack" style={{ gap: 8 }}>
+          <h3>{t("cal.next")}</h3>
+          {!q.data.breeding.length ? (
+            <p className="small muted">{t("cal.noneForHer")}</p>
+          ) : (
+            <Table
+              rows={q.data.breeding}
+              rowKey={(e) => `${e.code}:${e.date}`}
+              columns={[
+                { key: "d", header: t("common.date"), render: (e) => formatDate(e.date, t.locale) },
+                { key: "c", header: t("cal.step"), render: (e) => t.dyn(`cal.code.${e.code}.${ent.type}`, t(`cal.code.${e.code}`)) },
+                { key: "s", header: t("common.status"), render: (e) => breedingStatus(t, e) },
+              ]}
+            />
+          )}
+        </section>
+      )}
+      <section className="stack" style={{ gap: 8 }}>
+        <h3>{t("vacc.heading")}</h3>
+        {!q.data.vaccinations.length ? (
+          <p className="small muted">{animal.birth_date ? t("vacc.animalEmpty") : t("vacc.animalNoBirth")}</p>
+        ) : (
+          <Table
+            rows={[...open, ...done]}
+            rowKey={(s) => `${s.key}:${s.due_on}`}
+            columns={[
+              { key: "v", header: t("vacc.vaccine"), render: (s) => <span className="strong">{s.vaccine}</span> },
+              { key: "w", header: t("vacc.when"), render: (s) => stepWhen(t, s) },
+              { key: "due", header: t("vacc.dueOn"), render: (s) => (s.due_on ? formatDate(s.due_on, t.locale) : "–") },
+              { key: "s", header: t("common.status"), render: (s) => stepStatus(t, s) },
+              ...(canRecord && ent.status === "active"
+                ? [{ key: "a", header: <span className="visually-hidden">{t("vacc.record")}</span>, label: "", render: (s: VaccinationPlanStep) => (s.status !== "done" ? <Button size="sm" variant="quiet" onClick={() => onRecordStep(s)}>{t("vacc.record")}</Button> : null) }]
+                : []),
+            ]}
+          />
+        )}
+      </section>
+    </>
+  );
 }
 
 /**
  * One animal: what's known about it, its services and births, and its weights
  * (LIV-01, LIV-05, LIV-06). Opened from a row of the herd's animals.
  */
-export function AnimalPanel({ animalId, ent, herd, onExit, onClose }: { animalId: string; ent: EnterpriseDetail; herd: Animal[]; onExit: (a: Animal) => void; onClose: () => void }) {
+export function AnimalPanel({ animalId, ent, herd, onExit, onRecordStep, onClose }: {
+  animalId: string; ent: EnterpriseDetail; herd: Animal[]; onExit: (a: Animal) => void; onRecordStep: (s: VaccinationPlanStep) => void; onClose: () => void;
+}) {
   const t = useT();
   const key = useKey();
   const qty = useQty();
@@ -160,7 +248,9 @@ export function AnimalPanel({ animalId, ent, herd, onExit, onClose }: { animalId
   const back = () => setMode("view");
   if (a && mode === "edit") return <EditAnimalPanel animal={a} herd={herd} onClose={back} />;
   if (a && mode === "service") return <ServicePanel animal={a} onClose={back} />;
-  if (a && mode === "birth") return <BirthPanel animal={a} open={(breeding.data ?? []).filter((b) => !b.outcome)} onClose={back} />;
+  if (a && mode === "birth") return <BirthPanel animal={a} ent={ent} open={(breeding.data ?? []).filter((b) => !b.outcome)} onClose={back} />;
+  const unchecked = uncheckedService(breeding.data ?? []);
+  if (a && mode === "check" && unchecked) return <PregnancyCheckPanel breedingId={unchecked.id} animal={a} onClose={back} />;
   if (a && mode === "weight") return <WeightPanel animal={a} onClose={back} />;
 
   const inHerd = a?.status === "active" && ent.status === "active";
@@ -194,6 +284,7 @@ export function AnimalPanel({ animalId, ent, herd, onExit, onClose }: { animalId
             <Button onClick={() => setMode("edit")}>{t("common.edit")}</Button>
             <Button onClick={() => setMode("weight")}>{t("weight.record")}</Button>
             {female && <Button onClick={() => setMode("service")}>{t("breeding.record")}</Button>}
+            {female && unchecked && <Button onClick={() => setMode("check")}>{t("check.record")}</Button>}
             {female && <Button variant="primary" onClick={() => setMode("birth")}>{t("birth.record")}</Button>}
             <Button variant="quiet" onClick={() => (onClose(), onExit(a))}>{t("animal.exit")}</Button>
           </>
@@ -251,6 +342,8 @@ export function AnimalPanel({ animalId, ent, herd, onExit, onClose }: { animalId
               {young.length > 0 && <p className="small">{t("breeding.young", { list: young.map((y) => `${y.tag} ${y.name}`.trim()).join(", ") })}</p>}
             </section>
           )}
+
+          <ScheduleSection animal={a} ent={ent} onRecordStep={(s) => (onClose(), onRecordStep(s))} />
 
           <section className="stack" style={{ gap: 8 }}>
             <h3>{t("weight.heading")}</h3>

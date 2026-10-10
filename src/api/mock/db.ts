@@ -63,8 +63,10 @@ export interface MHealth {
   dose_note: string;
   subject: string;
   cost: number | null;
-  /** The vaccination schedule step this dose was (BAT-04). */
+  /** The vaccination schedule step this dose was (BAT-04, LIV-04). */
   schedule_day?: number | null;
+  schedule_key?: string;
+  animal_id?: string | null;
   recorded_by: MRecorder;
 }
 
@@ -78,6 +80,11 @@ export interface MBreeding {
   note: string;
   outcome: "born" | "failed" | null;
   birth_date: string | null;
+  pregnant?: boolean | null;
+  checked_on?: string | null;
+  born_alive?: number | null;
+  born_dead?: number | null;
+  litter_id?: string | null;
   recorded_by: MRecorder;
 }
 

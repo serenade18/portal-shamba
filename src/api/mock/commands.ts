@@ -157,7 +157,7 @@ export function sell(
 
 export function startEnterprise(
   data: OrgData,
-  e: { farm: string; type: T.TypeCode; name: string; date: string; count?: number | null; cost?: number; source?: string; structure?: string | null; plot?: string | null; variety?: string | null; area?: number | null; by: MRecorder },
+  e: { farm: string; type: T.TypeCode; name: string; date: string; count?: number | null; cost?: number; source?: string; structure?: string | null; plot?: string | null; variety?: string | null; area?: number | null; plantCount?: number | null; module?: T.Module; by: MRecorder },
 ): MEnterprise {
   const info = typeInfo(e.type);
   ensureItems(data, TYPE_ITEMS[e.type]);
@@ -165,7 +165,7 @@ export function startEnterprise(
     id: uid(),
     farm_id: e.farm,
     type: e.type,
-    module: info.module,
+    module: e.module ?? info.module,
     name: e.name,
     status: "active",
     started_on: e.date,
@@ -176,6 +176,7 @@ export function startEnterprise(
     start_count: e.count ?? null,
     variety: e.variety ?? null,
     area_acres: e.area != null ? String(e.area) : null,
+    plant_count: e.plantCount ?? null,
     cost: e.cost ?? null,
     source: e.source ?? "",
   };
@@ -268,7 +269,7 @@ export function feedDay(data: OrgData, ent: MEnterprise, d: { date: string; item
 export function treatment(
   data: OrgData,
   ent: MEnterprise,
-  t: { date: string; item: string; qty: number; unit: string; dose: string; subject: string; scheduleDay?: number | null; by: MRecorder },
+  t: { date: string; item: string; qty: number; unit: string; dose: string; subject: string; scheduleDay?: number | null; scheduleKey?: string; animalId?: string | null; by: MRecorder },
 ) {
   const mv = useInput(data, { farm: ent.farm_id, item: t.item, qty: t.qty, unit: t.unit, enterprise: ent.id, date: t.date, by: t.by }, "health", "treatment");
   const rec = {
@@ -280,6 +281,8 @@ export function treatment(
     subject: t.subject,
     cost: -mv.qty_base * (mv.unit_cost ?? 0),
     schedule_day: t.scheduleDay ?? null,
+    schedule_key: t.scheduleKey ?? "",
+    animal_id: t.animalId ?? null,
     recorded_by: t.by,
   };
   data.health.push(rec);

@@ -1,4 +1,4 @@
-import { api, http } from "./client";
+import { api, http, imageUrl } from "./client";
 import type * as T from "./types";
 
 type Q = Record<string, string | number | boolean | null | undefined>;
@@ -92,15 +92,23 @@ export const enterprises = {
 
 export const livestock = {
   animals: (enterpriseId: string) => http.get<T.Page<T.Animal>>("/animals", { enterprise_id: enterpriseId }),
-  createAnimal: (body: Omit<T.Animal, "id" | "status" | "milk_7d">) => http.post<T.Animal>("/animals", body),
+  /** `from_batch_id`: a grower kept for breeding leaves that batch (pigs, rabbits). */
+  createAnimal: (body: Omit<T.Animal, "id" | "status" | "milk_7d"> & { from_batch_id?: string | null }) => http.post<T.Animal>("/animals", body),
   animal: (id: string) => http.get<T.Animal & T.Edited>(`/animals/${id}`),
   updateAnimal: (id: string, body: Partial<Pick<T.Animal, "tag" | "name" | "sex" | "breed" | "birth_date" | "mother_id">>) =>
     http.patch<T.Animal & T.Edited>(`/animals/${id}`, body),
   breeding: (id: string) => http.get<T.Page<T.BreedingEvent>>(`/animals/${id}/breeding`),
   recordService: (id: string, body: { service_date: string; method: T.BreedingMethod; sire: string; note: string }) =>
     http.post<T.BreedingEvent>(`/animals/${id}/breeding`, body),
-  recordBirth: (id: string, body: { date: string; offspring: { tag: string; sex: T.Sex; name: string }[]; breeding_event_id: string | null }) =>
-    http.post<T.BirthResult>(`/animals/${id}/births`, body),
+  recordBirth: (id: string, body: T.BirthInput) => http.post<T.BirthResult>(`/animals/${id}/births`, body),
+  /** Pregnant, or not: not pregnant ends the service (LIV-05). */
+  pregnancyCheck: (breedingId: string, body: { date: string; pregnant: boolean }) =>
+    http.post<T.BreedingEvent>(`/breeding/${breedingId}/check`, body),
+  /** One animal's vaccinations and breeding calendar. */
+  schedule: (id: string) => http.get<T.AnimalSchedule>(`/animals/${id}/schedule`),
+  herdVaccinations: (enterpriseId: string) => http.get<T.HerdVaccinations>(`/herds/${enterpriseId}/vaccinations`),
+  herdBreedingCalendar: (enterpriseId: string) =>
+    http.get<{ enterprise_id: string; events: T.BreedingCalendarEvent[] }>(`/herds/${enterpriseId}/breeding-calendar`),
   weights: (id: string, cursor?: string) => http.get<T.Page<T.AnimalWeight>>(`/animals/${id}/weights`, { cursor }),
   recordWeight: (id: string, body: { date: string; kg: string }) => http.post<T.AnimalWeight>(`/animals/${id}/weights`, body),
   exitAnimal: (id: string, body: { reason: "sold" | "dead"; value: string; date: string }) =>
@@ -109,7 +117,7 @@ export const livestock = {
     http.post<T.DailyRecord>("/milk-records", body),
   recordFeed: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string }) =>
     http.post<T.DailyRecord>("/feeding-records", body),
-  recordTreatment: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string; dose_note: string; subject: string; schedule_day?: number | null }) =>
+  recordTreatment: (body: { enterprise_id: string; date: string; item_id: string; qty: string; unit: string; dose_note: string; subject: string; schedule_day?: number | null; schedule_key?: string; animal_id?: string | null }) =>
     http.post<T.HealthRecord>("/treatments", body),
 };
 
@@ -130,7 +138,7 @@ export const batches = {
 };
 
 export const crops = {
-  start: (body: { farm_id: string; type: T.TypeCode; plot_id: string; variety: string; area_acres: string; date: string; name: string }) =>
+  start: (body: { farm_id: string; type: T.TypeCode; plot_id: string; variety: string; area_acres: string; date: string; name: string; plant_count?: number | null }) =>
     http.post<T.Enterprise>("/seasons", body),
   activities: (id: string, cursor?: string) => http.get<T.Page<T.Activity>>(`/seasons/${id}/activities`, { cursor }),
   recordActivity: (id: string, body: { date: string; type: T.ActivityType; inputs: { item_id: string; qty: string; unit: string }[]; labour_cost: string; service_cost: string; note: string }) =>
@@ -190,6 +198,12 @@ export const finance = {
 
 export const weather = {
   get: (farmId: string) => http.get<T.Weather>("/weather", { farm_id: farmId }),
+};
+
+export const cropHealth = {
+  get: (farmId: string) => http.get<T.CropHealth>("/crop-health", { farm_id: farmId }),
+  /** A scene's PNG as a URL an <img> can show (the API needs the signed-in headers). */
+  image: (path: string) => imageUrl(path),
 };
 
 export const alerts = {

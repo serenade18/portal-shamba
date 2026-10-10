@@ -174,8 +174,9 @@ function seedKamau(): OrgData {
 
   // Layers were vaccinated on schedule (BAT-04).
   for (const step of VACCINATION_DEFAULTS.layers ?? []) {
-    const date = daysAgo(210 - step.day);
-    data.health.push({ id: crypto.randomUUID(), enterprise_id: layers.id, date, product: step.vaccine, dose_note: step.note, subject: "Whole batch", cost: 0, schedule_day: step.day, recorded_by: maryPhone(date) });
+    const day = step.day ?? 0;
+    const date = daysAgo(210 - day);
+    data.health.push({ id: crypto.randomUUID(), enterprise_id: layers.id, date, product: step.vaccine, dose_note: step.note, subject: "Whole batch", cost: 0, schedule_day: day, schedule_key: `age:${day}`, recorded_by: maryPhone(date) });
   }
 
   // Beans last season: closed, for plot history (FRM-06).

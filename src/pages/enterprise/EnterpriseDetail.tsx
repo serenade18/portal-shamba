@@ -4,14 +4,15 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { ApiError } from "@/api/client";
 import * as api from "@/api/endpoints";
-import { useCatalogue, useKey, usePaged } from "@/api/hooks";
-import type { Animal, DailyRecord, EnterpriseDetail as Detail, Module, VaccinationPlanStep } from "@/api/types";
+import { useCatalogue, useKey, useNavigation, usePaged } from "@/api/hooks";
+import type { Animal, BreedingCalendarEvent, DailyRecord, EnterpriseDetail as Detail, Module, VaccinationPlanStep } from "@/api/types";
 import { Button } from "@/components/ui/Button";
 import { BarsChart, ChartFrame } from "@/components/ui/charts";
 import { KpiRow, LoadMore, Money, PageHead, RecordedBy, Table, Tabs, useCurrency, useTabParam, type Column } from "@/components/ui/data";
 import { Chip, EmptyState, ErrorState, ModuleHidden, Skeleton, SkeletonRows } from "@/components/ui/feedback";
 import { Dialog } from "@/components/ui/overlay";
 import { useQty, useT } from "@/i18n";
+import { batchesLabel, HEAD_UNIT, isPerennial } from "@/lib/enterpriseTypes";
 import { formatDate, formatNumber, formatMoney, daysSince } from "@/lib/format";
 import { useCan } from "@/stores/session";
 import { EntriesTable } from "../../pages/money/EntriesTable";
@@ -23,10 +24,11 @@ import {
 } from "./forms";
 import { AnimalPanel } from "./AnimalPanel";
 import { BatchWeightsTab, SampleWeightPanel, SchedulePanel, VaccinationsTab } from "./BatchPanels";
+import { HerdBreedingTab, HerdVaccinationsTab, PregnancyCheckPanel } from "./HerdPanels";
 import { MODULE_PATH } from "./paths";
 
 type Action = "day" | "milk" | "feed" | "treatment" | "animal" | "activity" | "harvest" | "close" | "sample" | "schedule";
-type Tab = "records" | "animals" | "health" | "vaccinations" | "weights" | "stock" | "sales" | "money" | "activities" | "harvests";
+type Tab = "records" | "animals" | "breeding" | "health" | "vaccinations" | "weights" | "stock" | "sales" | "money" | "activities" | "harvests";
 
 function Meta({ ent }: { ent: Detail }) {
   const t = useT();
@@ -35,8 +37,11 @@ function Meta({ ent }: { ent: Detail }) {
     ent.status === "closed" && ent.closed_on ? t("ent.closedOn", { date: formatDate(ent.closed_on, t.locale) }) : t("ent.started", { date: formatDate(ent.started_on, t.locale) }),
     ent.structure_name,
     ent.plot_name,
-    ent.module === "batches" && t(ent.type === "fish" ? "ent.fish" : "ent.birds", { n: ent.head_count ?? 0, total: ent.start_count ?? 0 }),
+    ent.module === "batches" && (ent.type === "fish" || HEAD_UNIT[ent.type] === "bird"
+      ? t(ent.type === "fish" ? "ent.fish" : "ent.birds", { n: ent.head_count ?? 0, total: ent.start_count ?? 0 })
+      : t("ent.headOf", { n: ent.head_count ?? 0, total: ent.start_count ?? 0, unit: t.unit(HEAD_UNIT[ent.type] ?? "") })),
     ent.module === "crops" && ent.area_acres && `${qty(ent.area_acres, "acres", 2)}${ent.variety ? `, ${ent.variety}` : ""}`,
+    ent.module === "crops" && ent.plant_count != null && t("ent.plants", { n: formatNumber(ent.plant_count) }),
   ].filter(Boolean) as string[];
   return (
     <span className="row" style={{ gap: 16, rowGap: 4 }}>
@@ -252,6 +257,8 @@ export function EnterpriseDetail({ module }: { module: Module }) {
   const { id = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const catalogue = useCatalogue();
+  const nav = useNavigation();
+  const batchesKey = batchesLabel(nav.data?.types ?? []);
   const money = useCan("money.read");
   const canRecord = useCan("records.write");
   const canStock = useCan("stock.write");
@@ -260,8 +267,9 @@ export function EnterpriseDetail({ module }: { module: Module }) {
   const [exiting, setExiting] = useState<Animal | null>(null);
   const [openAnimal, setOpenAnimal] = useState<string | null>(null);
   const [vaccStep, setVaccStep] = useState<VaccinationPlanStep | null>(null);
+  const [checking, setChecking] = useState<BreedingCalendarEvent | null>(null);
   const q = useQuery({ queryKey: key("enterprise", id), queryFn: () => api.enterprises.get(id) });
-  const weighs = module === "batches" && (q.data?.type === "broilers" || q.data?.type === "fish");
+  const weighs = module === "batches" && !!q.data && q.data.type !== "layers";
   const animals = useQuery({ queryKey: key("animals", id), queryFn: () => api.livestock.animals(id), enabled: module === "livestock", select: (p) => p.results });
 
   // Links such as the dashboard's first step open a form directly: ?action=milk
@@ -280,9 +288,13 @@ export function EnterpriseDetail({ module }: { module: Module }) {
           { value: "harvests" as Tab, label: t("tab.harvests") },
         ]
       : [{ value: "records" as Tab, label: t("tab.records") }]),
-    ...(module === "livestock" ? [{ value: "animals" as Tab, label: t("tab.animals") }] : []),
-    ...(module !== "crops" ? [{ value: "health" as Tab, label: t("tab.health") }] : []),
-    ...(module === "batches" ? [{ value: "vaccinations" as Tab, label: t("tab.vaccinations") }] : []),
+    ...(module === "livestock"
+      ? [
+          { value: "animals" as Tab, label: t("tab.animals") },
+          { value: "breeding" as Tab, label: t("tab.breeding") },
+        ]
+      : []),
+    ...(module !== "crops" ? [{ value: "health" as Tab, label: t("tab.health") }, { value: "vaccinations" as Tab, label: t("tab.vaccinations") }] : []),
     ...(weighs ? [{ value: "weights" as Tab, label: t("tab.weights") }] : []),
     { value: "stock", label: t("tab.stock") },
     ...(money
@@ -295,7 +307,7 @@ export function EnterpriseDetail({ module }: { module: Module }) {
   const [tab, setTab] = useTabParam(tabs.map((x) => x.value), tabs[0]!.value);
 
   if (q.error instanceof ApiError && q.error.code === "module.disabled") {
-    return <ModuleHidden typeLabel={t(`nav.${module === "livestock" ? "animals" : module === "batches" ? "poultry" : "crops"}`)} />;
+    return <ModuleHidden typeLabel={t(module === "livestock" ? "nav.animals" : module === "batches" ? batchesKey : "nav.crops")} />;
   }
   if (q.error) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) {
@@ -312,6 +324,7 @@ export function EnterpriseDetail({ module }: { module: Module }) {
   const active = ent.status === "active";
   const type = catalogue.data?.enterprise_types.find((x) => x.code === ent.type);
   const milks = ent.type === "dairy_cattle" || ent.type === "dairy_goats";
+  const orchard = isPerennial(type);
 
   const actions = active && canRecord && (
     <>
@@ -323,7 +336,7 @@ export function EnterpriseDetail({ module }: { module: Module }) {
       {module === "livestock" && <Button onClick={() => setAction("animal")}>{t("ent.addAnimal")}</Button>}
       {module === "crops" && <Button variant="primary" onClick={() => setAction("activity")}>{t("ent.recordActivity")}</Button>}
       {module === "crops" && <Button onClick={() => setAction("harvest")}>{t("ent.recordHarvest")}</Button>}
-      {module !== "livestock" && canStock && money && <Button onClick={() => setAction("close")}>{module === "crops" ? t("ent.closeSeason") : t("ent.closeBatch")}</Button>}
+      {module !== "livestock" && canStock && money && <Button onClick={() => setAction("close")}>{orchard ? t("ent.closeOrchard") : module === "crops" ? t("ent.closeSeason") : t("ent.closeBatch")}</Button>}
     </>
   );
 
@@ -333,7 +346,7 @@ export function EnterpriseDetail({ module }: { module: Module }) {
   return (
     <>
       <Link to={MODULE_PATH[module]} className="small strong row" style={{ gap: 4, marginBottom: 8, textDecoration: "none" }}>
-        <ChevronLeft size={16} aria-hidden /> {t(`nav.${module === "livestock" ? "animals" : module === "batches" ? "poultry" : "crops"}`)}
+        <ChevronLeft size={16} aria-hidden /> {t(module === "livestock" ? "nav.animals" : module === "batches" ? batchesKey : "nav.crops")}
       </Link>
       <PageHead
         title={
@@ -353,7 +366,9 @@ export function EnterpriseDetail({ module }: { module: Module }) {
           {tab === "records" && <RecordsTab ent={ent} />}
           {tab === "animals" && <AnimalsTab animals={animalRows} loading={animals.isLoading} onOpen={(a) => setOpenAnimal(a.id)} onExit={setExiting} />}
           {tab === "health" && <HealthTab ent={ent} />}
-          {tab === "vaccinations" && <VaccinationsTab ent={ent} onRecord={setVaccStep} onEditSchedule={() => setAction("schedule")} />}
+          {tab === "breeding" && <HerdBreedingTab ent={ent} onOpenAnimal={setOpenAnimal} onCheck={setChecking} />}
+          {tab === "vaccinations" && module === "batches" && <VaccinationsTab ent={ent} onRecord={setVaccStep} onEditSchedule={() => setAction("schedule")} />}
+          {tab === "vaccinations" && module === "livestock" && <HerdVaccinationsTab ent={ent} onRecord={setVaccStep} onEditSchedule={() => setAction("schedule")} />}
           {tab === "weights" && <BatchWeightsTab ent={ent} />}
           {tab === "activities" && <ActivitiesTab ent={ent} />}
           {tab === "harvests" && <HarvestsTab ent={ent} />}
@@ -373,8 +388,9 @@ export function EnterpriseDetail({ module }: { module: Module }) {
       {action === "close" && <ClosePanel ent={ent} onClose={close} />}
       {action === "sample" && <SampleWeightPanel ent={ent} onClose={close} />}
       {action === "schedule" && <SchedulePanel types={[ent.type]} onClose={close} />}
-      {vaccStep && <RecordTreatmentPanel ent={ent} animals={[]} step={vaccStep} onClose={() => setVaccStep(null)} />}
-      {openAnimal && <AnimalPanel animalId={openAnimal} ent={ent} herd={animalRows} onExit={setExiting} onClose={() => setOpenAnimal(null)} />}
+      {vaccStep && <RecordTreatmentPanel ent={ent} animals={vaccStep.kind === "every" ? [] : animalRows} step={vaccStep} onClose={() => setVaccStep(null)} />}
+      {openAnimal && <AnimalPanel animalId={openAnimal} ent={ent} herd={animalRows} onExit={setExiting} onRecordStep={setVaccStep} onClose={() => setOpenAnimal(null)} />}
+      {checking?.breeding_event_id && <PregnancyCheckPanel breedingId={checking.breeding_event_id} animal={{ tag: checking.animal_tag }} onClose={() => setChecking(null)} />}
       {exiting && <AnimalExitPanel animal={exiting} onClose={() => setExiting(null)} />}
     </>
   );

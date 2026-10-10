@@ -168,19 +168,26 @@ export interface PaymentRequest {
 /* ---------- Catalogue and onboarding (planned) ---------- */
 
 export type Module = "livestock" | "batches" | "crops";
-export type TrackingMode = "individual" | "batch" | "crop_season";
+/** mixed: breeding stock one by one, litters as batches (pigs, rabbits). perennial: an orchard (bananas, avocados). */
+export type TrackingMode = "individual" | "batch" | "crop_season" | "mixed" | "perennial";
 export type TypeCode =
   | "dairy_cattle"
   | "beef_cattle"
   | "dairy_goats"
   | "sheep"
+  | "pigs"
+  | "rabbits"
   | "layers"
   | "broilers"
   | "fish"
   | "maize"
   | "beans"
   | "rice"
-  | "wheat";
+  | "wheat"
+  | "tomatoes"
+  | "kales"
+  | "bananas"
+  | "avocados";
 
 export interface EnterpriseType {
   code: TypeCode;
@@ -195,10 +202,23 @@ export interface ComingSoonType {
   labels: Record<Locale, string>;
 }
 
+/** When a type's breeding steps fall, in days (apps/catalogue/breeding.py). */
+export interface BreedingProfile {
+  gestation: number;
+  cycle: number | null;
+  pregnancy_check: number;
+  dry_off: number | null;
+  prepare: number;
+  wean: number;
+  serve_after_birth: number;
+  first_service: number;
+}
+
 export interface Catalogue {
   version: number;
   enterprise_types: EnterpriseType[];
   coming_soon: ComingSoonType[];
+  breeding?: Partial<Record<TypeCode, BreedingProfile>>;
 }
 
 export interface Navigation {
@@ -299,6 +319,8 @@ export interface Enterprise {
   start_count: number | null;
   variety: string | null;
   area_acres: string | null;
+  /** Plants, trees or stools in a crop enterprise, when counted. */
+  plant_count?: number | null;
 }
 
 export interface Kpi {
@@ -340,11 +362,16 @@ export interface HealthRecord {
   product: string;
   dose_note: string;
   subject: string;
+  /** The one animal treated; null for the whole herd or batch. */
+  animal_id?: string | null;
+  /** The vaccination schedule step this dose was for. */
+  schedule_key?: string | null;
   cost: string | null;
   recorded_by: Recorder;
 }
 
-export type ActivityType = "land_preparation" | "planting" | "weeding" | "spraying" | "fertilising" | "other";
+export type ActivityType =
+  | "land_preparation" | "planting" | "transplanting" | "weeding" | "spraying" | "fertilising" | "irrigation" | "pruning" | "other";
 
 export interface Activity {
   id: string;
@@ -404,12 +431,42 @@ export interface BreedingEvent {
   /** null while she is waiting to give birth. */
   outcome: "born" | "failed" | null;
   birth_date: string | null;
+  /** The pregnancy check: null until checked. */
+  pregnant?: boolean | null;
+  checked_on?: string | null;
+  /** A litter (pigs, rabbits): counted at birth and raised as a batch. */
+  born_alive?: number | null;
+  born_dead?: number | null;
+  litter_id?: string | null;
   recorded_by: Recorder;
 }
 
 export interface BirthResult {
   breeding_event: BreedingEvent | null;
+  /** The batch a litter is raised in. */
+  litter?: Enterprise | null;
   offspring: Animal[];
+}
+
+export interface BirthInput {
+  date: string;
+  offspring: { tag: string; sex: Sex; name: string }[];
+  breeding_event_id: string | null;
+  born_alive?: number | null;
+  born_dead?: number;
+  into_batch_id?: string | null;
+}
+
+export type BreedingCode = "heat_check" | "pregnancy_check" | "dry_off" | "prepare_birth" | "birth" | "wean" | "serve";
+
+/** One step of a female's breeding calendar (LIV-05). */
+export interface BreedingCalendarEvent {
+  code: BreedingCode;
+  date: string;
+  status: "due" | "overdue" | "upcoming";
+  animal_id: string;
+  animal_tag: string;
+  breeding_event_id: string | null;
 }
 
 export interface AnimalWeight {
@@ -429,18 +486,47 @@ export interface SampleWeight {
   recorded_by: Recorder;
 }
 
+export type VaccinationKind = "age" | "every" | "before_birth";
+
+/**
+ * A step of a vaccination schedule: by age (`day`; no `kind`), repeated for the whole herd
+ * (`every_days`), or before a birth (`days`). Batches follow steps by age only.
+ */
 export interface VaccinationStep {
-  day: number;
+  kind?: VaccinationKind;
+  day?: number;
+  every_days?: number;
+  days?: number;
+  /** Steps by age only: given to females or males only. */
+  sex?: Sex;
   vaccine: string;
   note: string;
 }
 
-export type VaccinationState = "done" | "due" | "overdue" | "upcoming" | "missed";
+export type VaccinationState = "done" | "due" | "overdue" | "upcoming" | "missed" | "not_recorded";
 
 export interface VaccinationPlanStep extends VaccinationStep {
-  due_on: string;
+  /** null for a repeated step never given here. */
+  due_on: string | null;
   status: VaccinationState;
   done_on: string | null;
+  /** Herds: the step's key for POST /treatments, and the one animal it is for. */
+  key?: string;
+  animal_id?: string | null;
+  animal_tag?: string | null;
+  last_done_on?: string;
+}
+
+export interface HerdVaccinations {
+  enterprise_id: string;
+  custom: boolean;
+  steps: VaccinationPlanStep[];
+}
+
+export interface AnimalSchedule {
+  animal_id: string;
+  vaccinations: VaccinationPlanStep[];
+  breeding: BreedingCalendarEvent[];
 }
 
 export interface BatchVaccinations {
@@ -705,6 +791,8 @@ export type AlertType =
   | "negative_stock"
   | "mortality_spike"
   | "vaccination_due"
+  | "breeding_due"
+  | "crop_stress"
   | "heavy_rain"
   | "overdue_debt"
   | "sync_conflict";
@@ -714,9 +802,9 @@ export interface Alert {
   type: AlertType;
   severity: "critical" | "warning" | "info";
   farm_id: string;
-  subject_type: "item" | "enterprise" | "customer" | "farm";
+  subject_type: "item" | "enterprise" | "customer" | "farm" | "animal";
   subject_id: string;
-  params: Record<string, string | number>;
+  params: Record<string, string | number | null>;
   status: "open" | "seen" | "resolved";
   money: boolean;
   created_at: string;
@@ -946,4 +1034,44 @@ export interface ManagedKey {
 /** GET /config/public: keys that are safe in any browser. */
 export interface PublicConfig {
   cesium_ion_token: string;
+}
+
+/* ---------- Crop health from satellite images (CRP-05) ---------- */
+
+export type CropHealthStatus = "ready" | "no_boundary" | "pending" | "unavailable" | "not_configured";
+export type CropHealthBand = "bare" | "poor" | "fair" | "good";
+
+export interface NdviStats {
+  mean: number;
+  median?: number;
+  min?: number;
+  max?: number;
+  p25?: number;
+  p75?: number;
+  std?: number;
+}
+
+export interface SatelliteScene {
+  id: string;
+  date: string;
+  taken_at: string;
+  satellite: string;
+  cloud_pct: number;
+  coverage_pct: number;
+  ndvi: NdviStats | null;
+  health: CropHealthBand | null;
+  /** API paths (under /api/v1) of the scene's PNGs; they need the signed-in headers. */
+  images: { ndvi: string | null; truecolor: string | null };
+}
+
+export interface CropHealth {
+  farm_id: string;
+  status: CropHealthStatus;
+  /** Under 1 ha: the images reach past the farm's edge. */
+  scaled: boolean;
+  checked_at: string | null;
+  /** [west, south, east, north] the images cover. */
+  bounds: [number, number, number, number] | null;
+  latest: (SatelliteScene & { trend: { change: number; since: string; direction: "falling" | "rising" | "steady" } | null }) | null;
+  scenes: SatelliteScene[];
 }

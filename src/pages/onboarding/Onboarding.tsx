@@ -84,6 +84,7 @@ export function Onboarding() {
               <TypeTiles types={types} value={picks} onChange={setPicks} />
             )}
 
+            {!!catalogue.data?.coming_soon.length && (
             <section className="stack" style={{ gap: 12 }}>
               <h2>{t("choose.comingSoon")}</h2>
               <p className="small muted">{t("choose.comingSoonHelp")}</p>
@@ -105,6 +106,7 @@ export function Onboarding() {
                 })}
               </div>
             </section>
+            )}
 
             <Field label={t("choose.other")} optional>
               {(id) => <input id={id} className="input" value={other} onChange={(e) => setOther(e.target.value)} placeholder={t("choose.otherPlaceholder")} maxLength={120} />}

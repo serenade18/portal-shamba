@@ -692,3 +692,25 @@
   font-size: var(--fs-small);
   flex: none;
 }
+
+/* Crop health: a satellite scene laid over the farm boundary. */
+.crop-map {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  border-radius: var(--radius, 12px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.crop-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 480px;
+}
+.crop-map-note {
+  position: absolute;
+  inset: auto 0 12px;
+  text-align: center;
+}

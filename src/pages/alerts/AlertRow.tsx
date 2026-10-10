@@ -1,4 +1,4 @@
-import { AlertTriangle, CloudRain, Info, Syringe, TrendingDown, Wallet, Warehouse } from "lucide-react";
+import { AlertTriangle, CalendarHeart, CloudRain, Info, Satellite, Syringe, TrendingDown, Wallet, Warehouse } from "lucide-react";
 import { Link } from "react-router";
 import type { Alert } from "@/api/types";
 import { useCurrency } from "@/components/ui/data";
@@ -10,6 +10,8 @@ const ICON: Record<Alert["type"], typeof AlertTriangle> = {
   negative_stock: Warehouse,
   mortality_spike: TrendingDown,
   vaccination_due: Syringe,
+  breeding_due: CalendarHeart,
+  crop_stress: Satellite,
   heavy_rain: CloudRain,
   overdue_debt: Wallet,
   sync_conflict: Info,
@@ -21,9 +23,14 @@ export function alertLink(a: Alert): string {
     case "negative_stock":
       return `/purchases?new=1&item=${a.subject_id}`;
     case "mortality_spike":
-    case "vaccination_due":
     case "sync_conflict":
-      return `/poultry/${a.subject_id}`;
+      return `/e/${a.subject_id}`;
+    case "vaccination_due":
+      return `/e/${a.subject_id}?tab=vaccinations`;
+    case "breeding_due":
+      return `/e/${a.params.enterprise_id}?tab=breeding`;
+    case "crop_stress":
+      return "/crop-health";
     case "heavy_rain":
       return "/weather";
     case "overdue_debt":
@@ -36,10 +43,21 @@ export function alertText(a: Alert, t: Translator, currency: string): string {
   const p = { ...a.params };
   // Item names come in each language as item_sw, item_fr; `item` is English.
   if (p[`item_${t.locale}`]) p.item = p[`item_${t.locale}`];
+  // The server names these vaccine, enterprise_name and due_on.
+  p.product ??= p.vaccine ?? null;
+  p.enterprise ??= p.enterprise_name ?? null;
+  p.date ??= p.due_on ?? null;
+  p.animal = p.animal_tag ?? null;
   if (typeof p.date === "string") p.date = formatDate(p.date, t.locale, { year: false, weekday: a.type === "heavy_rain" });
   if (p.unit) p.unit = t.unit(String(p.unit), Number(p.qty) === 1 ? 1 : 2);
   if (p.amount != null) p.amount = formatMoney(p.amount, currency);
   if (p.rain_mm != null) p.rain = Math.round(Number(p.rain_mm));
+  if (a.type === "vaccination_due" && p.animal) return t("alert.vaccination_due_animal", p);
+  if (a.type === "breeding_due") return t.dyn(`alert.breeding_due.${p.code}`, t("alert.breeding_due"), p);
+  if (a.type === "crop_stress") {
+    p.ndvi = Number(p.ndvi).toFixed(2);
+    p.previous = Number(p.previous).toFixed(2);
+  }
   return t.dyn(`alert.${a.type}`, a.type, p);
 }
 
