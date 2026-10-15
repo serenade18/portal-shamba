@@ -1169,6 +1169,7 @@ const sw: Record<keyof typeof en, string> = {
   "admin.keys.group.mpesa": "M-Pesa (Daraja)",
   "admin.keys.group.sasapay": "SasaPay",
   "admin.keys.group.weather": "Hali ya hewa",
+  "admin.keys.group.ai": "Ukaguzi wa picha kwa AI (Anthropic)",
   "admin.keys.group.maps": "Ramani",
   "admin.keys.group.staff": "Ufikiaji wa wafanyakazi",
   "admin.keys.col.key": "Ufunguo",

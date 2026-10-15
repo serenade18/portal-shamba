@@ -1169,6 +1169,7 @@ const fr: Record<keyof typeof en, string> = {
   "admin.keys.group.mpesa": "M-Pesa (Daraja)",
   "admin.keys.group.sasapay": "SasaPay",
   "admin.keys.group.weather": "Météo",
+  "admin.keys.group.ai": "Analyse de photos par IA (Anthropic)",
   "admin.keys.group.maps": "Cartes",
   "admin.keys.group.staff": "Accès du personnel",
   "admin.keys.col.key": "Clé",

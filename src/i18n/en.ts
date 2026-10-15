@@ -1163,6 +1163,7 @@ const en = {
   "admin.keys.group.mpesa": "M-Pesa (Daraja)",
   "admin.keys.group.sasapay": "SasaPay",
   "admin.keys.group.weather": "Weather",
+  "admin.keys.group.ai": "AI photo checks (Anthropic)",
   "admin.keys.group.maps": "Maps",
   "admin.keys.group.staff": "Staff access",
   "admin.keys.col.key": "Key",
