@@ -18,6 +18,8 @@ export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: {
     port: 3000,
+    // Listen on the LAN too, so phones and other machines can open the portal.
+    host: true,
     // The Django API in development. Same-origin through the proxy, so no CORS setup is needed.
     proxy: { "/api": { target: process.env.VITE_API_TARGET ?? "http://localhost:8000", changeOrigin: true } },
   },
