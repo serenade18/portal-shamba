@@ -11,7 +11,7 @@ export const BREEDING: Partial<Record<TypeCode, BreedingProfile>> = {
 };
 
 export const CATALOGUE: Catalogue = {
-  version: 3,
+  version: 4,
   enterprise_types: [
     { code: "dairy_cattle", module: "livestock", tracking_mode: "individual", icon: "🐄", labels: { en: "Dairy cows", sw: "Ng'ombe wa maziwa", fr: "Vaches laitières" } },
     { code: "beef_cattle", module: "livestock", tracking_mode: "individual", icon: "🐂", labels: { en: "Beef cattle", sw: "Ng'ombe wa nyama", fr: "Bovins à viande" } },
@@ -28,6 +28,7 @@ export const CATALOGUE: Catalogue = {
     { code: "wheat", module: "crops", tracking_mode: "crop_season", icon: "🌾", labels: { en: "Wheat", sw: "Ngano", fr: "Blé" } },
     { code: "tomatoes", module: "crops", tracking_mode: "crop_season", icon: "🍅", labels: { en: "Tomatoes", sw: "Nyanya", fr: "Tomates" } },
     { code: "kales", module: "crops", tracking_mode: "crop_season", icon: "🥬", labels: { en: "Kales", sw: "Sukuma wiki", fr: "Choux kale" } },
+    { code: "spinach", module: "crops", tracking_mode: "crop_season", icon: "🥬", labels: { en: "Spinach", sw: "Spinachi", fr: "Épinards" } },
     { code: "bananas", module: "crops", tracking_mode: "perennial", icon: "🍌", labels: { en: "Bananas", sw: "Ndizi", fr: "Bananes" } },
     { code: "avocados", module: "crops", tracking_mode: "perennial", icon: "🥑", labels: { en: "Avocados", sw: "Parachichi", fr: "Avocats" } },
   ],
@@ -63,6 +64,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   live_rabbits: { code: "live_rabbits", category: "produce", kind: "output", name: { en: "Rabbits (live)", sw: "Sungura (hai)", fr: "Lapins (vivants)" }, base_unit: "rabbit", display_unit: "rabbit", units: [{ code: "rabbit", factor: 1 }] },
   tomatoes: { code: "tomatoes", category: "produce", kind: "output", name: { en: "Tomatoes", sw: "Nyanya", fr: "Tomates" }, base_unit: "kg", display_unit: "crate", units: [{ code: "crate", factor: 64 }, { code: "kg", factor: 1 }] },
   kales: { code: "kales", category: "produce", kind: "output", name: { en: "Kales", sw: "Sukuma wiki", fr: "Choux kale" }, base_unit: "kg", display_unit: "kg", units: [{ code: "kg", factor: 1 }, { code: "bunch", factor: 0.5 }, { code: "bag", factor: 50 }] },
+  spinach: { code: "spinach", category: "produce", kind: "output", name: { en: "Spinach", sw: "Spinachi", fr: "Épinards" }, base_unit: "kg", display_unit: "kg", units: [{ code: "kg", factor: 1 }, { code: "bunch", factor: 0.5 }, { code: "bag", factor: 50 }] },
   bananas: { code: "bananas", category: "produce", kind: "output", name: { en: "Bananas", sw: "Ndizi", fr: "Bananes" }, base_unit: "bunch", display_unit: "bunch", units: [{ code: "bunch", factor: 1 }] },
   avocados: { code: "avocados", category: "produce", kind: "output", name: { en: "Avocados", sw: "Parachichi", fr: "Avocats" }, base_unit: "kg", display_unit: "kg", units: [{ code: "kg", factor: 1 }, { code: "piece", factor: 0.25 }, { code: "crate", factor: 50 }] },
   sow_weaner_meal: { code: "sow_weaner_meal", category: "feed", kind: "input", name: { en: "Sow and weaner meal", sw: "Chakula cha nguruwe wazazi na wachanga", fr: "Aliment truies et porcelets" }, base_unit: "kg", display_unit: "bag", units: [{ code: "bag", factor: 70 }, { code: "kg", factor: 1 }], low: 140 },
@@ -71,6 +73,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   npk: { code: "npk", category: "fertiliser", kind: "input", name: { en: "NPK fertiliser", sw: "Mbolea ya NPK", fr: "Engrais NPK" }, base_unit: "kg", display_unit: "bag", units: [{ code: "bag", factor: 50 }, { code: "kg", factor: 1 }] },
   seed_tomato: { code: "seed_tomato", category: "seed", kind: "input", name: { en: "Tomato seed", sw: "Mbegu za nyanya", fr: "Semences de tomates" }, base_unit: "g", display_unit: "packet", units: [{ code: "packet", factor: 10 }, { code: "g", factor: 1 }] },
   seed_kale: { code: "seed_kale", category: "seed", kind: "input", name: { en: "Kale seed", sw: "Mbegu za sukuma wiki", fr: "Semences de chou kale" }, base_unit: "g", display_unit: "packet", units: [{ code: "packet", factor: 50 }, { code: "g", factor: 1 }] },
+  seed_spinach: { code: "seed_spinach", category: "seed", kind: "input", name: { en: "Spinach seed", sw: "Mbegu za spinachi", fr: "Semences d'épinards" }, base_unit: "g", display_unit: "packet", units: [{ code: "packet", factor: 50 }, { code: "g", factor: 1 }] },
   banana_plantlets: { code: "banana_plantlets", category: "seed", kind: "input", name: { en: "Banana plantlets", sw: "Miche ya ndizi", fr: "Plants de bananier" }, base_unit: "piece", display_unit: "piece", units: [{ code: "piece", factor: 1 }] },
   avocado_seedlings: { code: "avocado_seedlings", category: "seed", kind: "input", name: { en: "Avocado seedlings", sw: "Miche ya parachichi", fr: "Plants d'avocatier" }, base_unit: "piece", display_unit: "piece", units: [{ code: "piece", factor: 1 }] },
   iron_injection: { code: "iron_injection", category: "drug", kind: "input", name: { en: "Iron injection (piglets)", sw: "Sindano ya madini ya chuma (nguruwe wachanga)", fr: "Injection de fer (porcelets)" }, base_unit: "ml", display_unit: "bottle", units: [{ code: "bottle", factor: 100 }, { code: "ml", factor: 1 }] },
@@ -94,6 +97,7 @@ export const TYPE_ITEMS: Record<TypeCode, string[]> = {
   wheat: ["wheat_grain", "dap", "can", "pesticide"],
   tomatoes: ["tomatoes", "seed_tomato", "dap", "can", "npk", "fungicide", "pesticide"],
   kales: ["kales", "seed_kale", "dap", "can", "pesticide"],
+  spinach: ["spinach", "seed_spinach", "dap", "can", "pesticide"],
   bananas: ["bananas", "banana_plantlets", "npk", "dap"],
   avocados: ["avocados", "avocado_seedlings", "npk", "fungicide", "pesticide"],
 };
@@ -113,6 +117,7 @@ export const TYPE_OUTPUT: Partial<Record<TypeCode, { item: string; unit: string 
   rabbits: { item: "live_rabbits", unit: "rabbit" },
   tomatoes: { item: "tomatoes", unit: "kg" },
   kales: { item: "kales", unit: "kg" },
+  spinach: { item: "spinach", unit: "kg" },
   bananas: { item: "bananas", unit: "bunch" },
   avocados: { item: "avocados", unit: "kg" },
 };

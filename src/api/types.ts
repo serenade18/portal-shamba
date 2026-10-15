@@ -186,6 +186,7 @@ export type TypeCode =
   | "wheat"
   | "tomatoes"
   | "kales"
+  | "spinach"
   | "bananas"
   | "avocados";
 
