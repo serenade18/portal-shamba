@@ -1800,6 +1800,8 @@ const MOCK_KEYS: [T.KeyName, T.KeyGroup, string, T.ManagedKey["kind"], string[]?
   ["SASAPAY_ENV", "sasapay", "Environment", "choice", ["sandbox", "production"]], ["SASAPAY_CLIENT_ID", "sasapay", "Client ID", "text"],
   ["SASAPAY_CLIENT_SECRET", "sasapay", "Client secret", "secret"], ["SASAPAY_MERCHANT_CODE", "sasapay", "Merchant code", "text"],
   ["OPENWEATHER_API_KEY", "weather", "OpenWeather API key", "secret"], ["AGRO_MONITORING_API_KEY", "weather", "Agro Monitoring API key", "secret"],
+  ["ANTHROPIC_API_KEY", "ai", "Anthropic API key", "secret"],
+  ["GOOGLE_WEB_CLIENT_ID", "google", "Web client ID", "text"], ["GOOGLE_IOS_CLIENT_ID", "google", "iOS client ID", "text"],
   ["CESIUM_ION_TOKEN", "maps", "Cesium ion token", "secret"], ["STAFF_SIGNUP_KEY", "staff", "Staff sign-up key", "secret"],
 ];
 const mockEnv: Partial<Record<T.KeyName, string>> = { MPESA_ENV: "sandbox", SASAPAY_ENV: "sandbox", STAFF_SIGNUP_KEY: "shamba-staff-key" };
@@ -1850,7 +1852,11 @@ route("DELETE", "/staff/keys/:name", (ctx) => {
   return keyRow(ctx, name);
 }, { org: false });
 
-route("GET", "/config/public", () => ({ cesium_ion_token: mockSaved.get("CESIUM_ION_TOKEN")?.value ?? "" }) satisfies T.PublicConfig, { org: false, auth: false });
+route("GET", "/config/public", () => ({
+  cesium_ion_token: mockSaved.get("CESIUM_ION_TOKEN")?.value ?? "",
+  google_web_client_id: mockSaved.get("GOOGLE_WEB_CLIENT_ID")?.value ?? "",
+  google_ios_client_id: mockSaved.get("GOOGLE_IOS_CLIENT_ID")?.value ?? "",
+}) satisfies T.PublicConfig, { org: false, auth: false });
 
 /** Repeatable pseudo-random numbers, so the demo shows the same platform each load. */
 function seeded(seed: number) {

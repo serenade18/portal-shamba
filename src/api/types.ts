@@ -1003,13 +1003,15 @@ export interface StaffAnalytics {
 
 /* ---------- Integration keys (GET /staff/keys, super admins only) ---------- */
 
-export type KeyGroup = "sms" | "email" | "mpesa" | "sasapay" | "weather" | "maps" | "staff";
+export type KeyGroup = "sms" | "email" | "mpesa" | "sasapay" | "weather" | "ai" | "google" | "maps" | "staff";
 export type KeyName =
   | "SMS_API_KEY" | "SMS_CLIENT_ID" | "SMS_ACCESS_KEY" | "SMS_SENDER_ID"
   | "RESEND_API_KEY"
   | "MPESA_ENV" | "MPESA_CONSUMER_KEY" | "MPESA_CONSUMER_SECRET" | "MPESA_SHORTCODE" | "MPESA_PASSKEY" | "MPESA_CALLBACK_URL"
   | "SASAPAY_ENV" | "SASAPAY_CLIENT_ID" | "SASAPAY_CLIENT_SECRET" | "SASAPAY_MERCHANT_CODE"
   | "OPENWEATHER_API_KEY" | "AGRO_MONITORING_API_KEY"
+  | "ANTHROPIC_API_KEY"
+  | "GOOGLE_WEB_CLIENT_ID" | "GOOGLE_IOS_CLIENT_ID"
   | "CESIUM_ION_TOKEN"
   | "STAFF_SIGNUP_KEY";
 
@@ -1035,6 +1037,9 @@ export interface ManagedKey {
 /** GET /config/public: keys that are safe in any browser. */
 export interface PublicConfig {
   cesium_ion_token: string;
+  /** Google sign-in in the mobile app. */
+  google_web_client_id: string;
+  google_ios_client_id: string;
 }
 
 /* ---------- Crop health from satellite images (CRP-05) ---------- */

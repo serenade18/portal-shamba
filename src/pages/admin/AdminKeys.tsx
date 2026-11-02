@@ -23,7 +23,7 @@ import { toast } from "@/stores/toast";
  * value at a time (audited on the server) and hides it again after a while.
  */
 
-const GROUPS: KeyGroup[] = ["sms", "email", "mpesa", "sasapay", "weather", "maps", "staff"];
+const GROUPS: KeyGroup[] = ["sms", "email", "mpesa", "sasapay", "weather", "ai", "google", "maps", "staff"];
 
 export function AdminKeys() {
   const t = useT();
@@ -255,6 +255,9 @@ const HELP = {
   SMS_SENDER_ID: "admin.keys.help.SMS_SENDER_ID",
   OPENWEATHER_API_KEY: "admin.keys.help.OPENWEATHER_API_KEY",
   AGRO_MONITORING_API_KEY: "admin.keys.help.AGRO_MONITORING_API_KEY",
+  ANTHROPIC_API_KEY: "admin.keys.help.ANTHROPIC_API_KEY",
+  GOOGLE_WEB_CLIENT_ID: "admin.keys.help.GOOGLE_WEB_CLIENT_ID",
+  GOOGLE_IOS_CLIENT_ID: "admin.keys.help.GOOGLE_IOS_CLIENT_ID",
   CESIUM_ION_TOKEN: "admin.keys.help.CESIUM_ION_TOKEN",
   STAFF_SIGNUP_KEY: "admin.keys.help.STAFF_SIGNUP_KEY",
   MPESA_CALLBACK_URL: "admin.keys.help.MPESA_CALLBACK_URL",
