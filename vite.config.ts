@@ -16,6 +16,13 @@ export default defineConfig({
     }),
   ],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  build: {
+    // The Django backend serves the portal from its frontend/dist (WhiteNoise + an index.html
+    // fallback, see core/portal.py there). Set PORTAL_OUT_DIR to build somewhere else.
+    outDir: process.env.PORTAL_OUT_DIR ?? fileURLToPath(new URL("../ShambaOS-m/frontend/dist", import.meta.url)),
+    // The folder is outside this project, so Vite only clears it when told to.
+    emptyOutDir: true,
+  },
   server: {
     port: 3000,
     // Listen on the LAN too, so phones and other machines can open the portal.
